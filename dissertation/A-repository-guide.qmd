@@ -1,0 +1,178 @@
+# Repository Guide {#sec-appendix-repo}
+
+This appendix describes the project repository (`Code_DD`) as of November 8, 2026.
+It explains how the additions to `ggpcp` fit the package's pipeline and feed the analysis, inventories what each part of the repository contains, proposes a structure for the copy that is shared, and reports the results of running the test suite.
+The `Literature Review` and `Updated numerical ties` folders were reviewed file by file, and `comprehensive_exam/` was reviewed for material to bring into the chapters.
+Other folders are described from their names only and are marked as not reviewed.
+
+## How the `ggpcp` Additions Fit the Pipeline {#sec-appendix-pipeline}
+
+`ggpcp` separates the preparation of the data for a parallel coordinate plot from its rendering.
+Three functions prepare the data, `pcp_select()`, `pcp_scale()`, and `pcp_arrange()`, and the last of these breaks ties on categorical axes.
+The additions in `Updated numerical ties/pcp_spread_ties.R` insert a fourth step that breaks ties on numerical axes and add an annotation layer for the result:
+
+```r
+data |>
+  pcp_select(...)          |>  # ggpcp: reshape to long form
+  pcp_scale("uniminmax")   |>  # ggpcp: scale each axis to [0, 1]
+  pcp_arrange("from-right") |> # ggpcp: break categorical ties
+  pcp_spread_ties("from-right", sigma = 0.9)   # new: break numerical ties
+
+# or, equivalently, both tie-breaking steps in one call:
+#   pcp_arrange_unified("from-right", sigma = 0.9)
+
+ggplot(aes_pcp()) +
+  geom_pcp_tieboxes(pcp_tie_boxes(...)) +  # new: boxes behind the lines
+  geom_pcp_axes() + geom_pcp() + geom_pcp_boxes() + geom_pcp_labels()
+```
+
+| Function | Role | Where described |
+|:---------|:---------------------------|:---------|
+| `pcp_spread_ties()` | Fourth data-preparation step. Computes the axis resolution $\delta_j$, builds a band for each tied value, orders the tied observations against the reference axis, and attaches the band geometry as the attribute `pcp_ties`. Arguments `vars`, `center`, `center_reference`, `min_gap`, and `min_spacing` give per-axis selection, the `from-both` center, and the two diagnostics. | @sec-algorithm, @sec-direction, @sec-boundary, @sec-implementation |
+| `tie_spread()` | Alias of `pcp_spread_ties()` under the name used in the proposal. | @sec-method |
+| `pcp_arrange_unified()` | Drop-in replacement for `pcp_arrange()` that runs `pcp_arrange()` on factor axes and then `pcp_spread_ties()` on numerical axes. | @sec-unified |
+| `pcp_tie_boxes()` | Converts `pcp_ties` into one rectangle per band with the original value as its label; `min_n` drops small bands. | @sec-annotation |
+| `geom_pcp_tieboxes()` | `ggplot2` layers that draw the boxes, and optionally the labels, behind the polylines. A standalone layer over precomputed boxes rather than a `ggproto` extension. | @sec-annotation |
+| `tie_groups()`, `axis_resolution()`, `spread_one_axis()` | Internal helpers: tolerance grouping, $\delta_j$, and the per-axis loop excerpted in Chapter 3. | @sec-algorithm |
+
+: Functions defined in `pcp_spread_ties.R` (@sec-appendix-code). {#tbl-functions}
+
+The additions feed the analysis in three places.
+First, the data figures in Chapter 3, on the `iris`, Palmer penguins, and flea beetle data, are produced by this pipeline.
+Second, the package vignette `numerical-ties.qmd` (*Breaking ties on numeric axes*) demonstrates the same functions on `iris`, on the `flea` data from `GGally`, where it contrasts keeping a variable numeric with coercing it to a factor, and on the Palmer penguins.
+Third, the `pcp_ties` attribute records, for every band, the value, multiplicity, allocation, interior region, and spacing, which are the quantities the computational evaluation planned for Chapter 4 measures.
+
+Two points of scope apply to the current code.
+The functions are written to live inside `ggpcp`: the vignette calls them after `library(ggpcp)` without sourcing the file, so it runs only against a version of `ggpcp` that includes them, or after `source("pcp_spread_ties.R")`.
+Two elements of the November 9 revision of the proposal are not yet implemented: the `resolution` argument, with its diagnostic, and the count label. Missing values are outside the scope of the dissertation, and the code leaves them unchanged.
+
+## Inventory {#sec-appendix-inventory}
+
+@tbl-inventory-top lists the top level of the repository, @tbl-inventory-lit the `Literature Review` folder, and @tbl-inventory-ties the `Updated numerical ties` folder.
+*Status* records whether a file is current, superseded, generated output, or not reviewed, and the recommendation refers to the proposed structure in @sec-appendix-structure.
+
+| Path | Contents | Status and recommendation |
+|:--------------|:------------------|:-----------------|
+| `Bunny Trails/` | Not reviewed | Leave out of the shared copy |
+| `comprehensive_exam/` | The November 2026 proposal (`second_attempt.qmd`) and its revision memo, earlier proposal PDFs, advisor-annotated drafts, the 2025 exam presentation, and their images | Source of Chapter 1, two figures in Chapter 2, and parts of Chapter 3. Leave out of the shared copy; the advisers already hold the proposal |
+| `Literature Review/` | Chapter 2 source, images, bibliography | Current; see @tbl-inventory-lit |
+| `numerical_tie_attempts/` | Eight earlier tie-breaking scripts (`even_space_ties.R`, `ggpcp_unit_test.R`, `ModifictationsPCP.R`, `Numerical_ties_pcp.R`, `toy_example.R`, `unified_tie_breaking.R`, `unified_tie_breaking_example.R`, `Updated_pcp_arrange.R`), `asthma.csv`, and `Updated numerical ties/` | Scripts not reviewed; their names suggest earlier versions of what `pcp_spread_ties.R` now does. Confirm, then move to `archive/`. Move `asthma.csv` to `data/`. See @tbl-inventory-ties |
+| `Code/` | Not reviewed | Sort into `scripts/` or `archive/` |
+| `pcp_arrange_update.qmd`, `.pdf`; `pcp_arrange-notes.pdf` | Notes on changes to `pcp_arrange()`; not reviewed | `archive/` unless cited |
+| `README.md` | Not reviewed | Rewrite to describe the structure and how to build each part |
+| `_extensions/`, `style.css`, `unl-theme.scss`, UNL logos, `ware_three_stage_model.png` | Quarto extensions and presentation assets | `assets/` |
+| `Code_DD.Rproj` | RStudio project | Keep as the single project file |
+
+: Top level of the repository. {#tbl-inventory-top}
+
+| Path | Contents | Status and recommendation |
+|:--------------|:------------------|:-----------------|
+| `literature_review_numerical_ties.qmd` | Chapter 2, restructured in September 2026 to follow the proposal | Current; Chapter 2 of this draft |
+| `references.bib` | 47 entries | Merged into the single bibliography (see below) |
+| `images/` | 14 images; 5 are used by Chapter 2 | Keep the 5; archive the other 9 (`cap_historic`, `enhance_example`, `orig_sankey`, `pcp19th`, `pcp_chords`, `pcp_hist` in two formats, `pcp_scatter`, `sankey_history`) |
+| `Chapter2.qmd`, `Chapter2.pdf` | Earlier chapter draft, *Breaking the Clutter*, whose abstract presents incremental offset, jitter spacing, and cascade-rank tie-breaking as existing `ggpcp` features | Superseded; `archive/` |
+| `README.md` | Not a README: survey notes on rank-based tie-breaking and scatterplot methods, duplicated in `outdated writing/`. Several sources are attached to methods they do not appear to concern (for example, a consumer-protection paper cited for dense ranking) | `archive/`; check every citation before reuse |
+| `outdated writing/` | Candidacy documents, an earlier literature review, and a "graveyard" of removed text | `archive/` |
+| `_extensions/`, `edits.css` | Quarto filter and HTML styles for editing colors | `assets/` |
+| `literature_review_numerical_ties.pdf`, `*_files/` | Rendered output and render cache | Regenerate on build; do not track |
+
+: The `Literature Review` folder. {#tbl-inventory-lit}
+
+| Path | Contents | Status and recommendation |
+|:--------------|:------------------|:-----------------|
+| `pcp_spread_ties.R` | The implementation (496 lines, base R plus `rlang`, `tidyselect`, `ggplot2`) | Current; `ggpcp-ties/R/` |
+| `test_pcp_spread_ties.R` | Base-R test suite, 11 groups, 36 checks | Current; `ggpcp-ties/tests/`. Sources the implementation from an absolute path (`/home/claude/work/...`) that exists on no other machine; change to a relative path |
+| `example_usage.R` | Worked examples: `iris`, penguins, per-axis `vars`, `from-both`, before/after, and $\sigma$ panels | Current and runs; needs `janitor`. `ggpcp-ties/examples/` |
+| `numerical-ties.qmd` | Package vignette, *Breaking ties on numeric axes* | Current; `ggpcp-ties/vignettes/` |
+| `numerical_ties_method.qmd` | Chapter 3 source | Partly out of date; carry over the corrections listed in @sec-appendix-actions |
+| `figures/` | Chapter 3 figures | Replace with the versions regenerated for this draft |
+| `references.bib` | 61 entries, 12 keys entered twice | Merged into the single bibliography |
+| `numerical_ties_method.pdf`, `*_files/` | Rendered output and render cache | Regenerate on build; do not track |
+| `.RData`, `.Rhistory`, `.Rproj.user/`, `Updated numerical ties.Rproj` | Saved session state and a project nested inside `Code_DD.Rproj` | Delete; add to `.gitignore` |
+
+: The `Updated numerical ties` folder. {#tbl-inventory-ties}
+
+The two bibliographies share 23 keys, and 16 of them differ between files.
+Most differences are formatting, but three are substantive: `cleveland1984` refers to a different 1984 paper in each file, `schonlau2003` has two different titles, and `schonlau2024` is listed with a second author in one file.
+In each case the literature-review entry matches the paper as cited in Chapter 2 (for `schonlau2024`, the single-author paper in the *Journal of Computational and Graphical Statistics*), so the merged bibliography of 73 entries used for this draft takes the literature-review version of every shared key.
+
+## Proposed Structure {#sec-appendix-structure}
+
+The proposed layout separates three things the current folders mix: the dissertation document, the code destined for `ggpcp`, and superseded material.
+Folder names contain no spaces, which avoids quoting problems in shell commands and Quarto paths.
+`ggpcp-ties/` mirrors the layout of an R package so that its files can move into a fork of `ggpcp` (`R/`, `tests/testthat/`, `vignettes/`) for a pull request without reorganization.
+
+```
+Code_DD/
+|-- README.md            what is here and how to build each part
+|-- Code_DD.Rproj
+|-- .gitignore           .RData, .Rhistory, .Rproj.user/, *_files/, _book/
+|-- dissertation/        this document: Quarto book, UNL nuthesis class
+|   |-- _quarto.yml  index.qmd  01-introduction.qmd
+|   |-- 02-literature-review.qmd  03-method.qmd
+|   |-- A-repository-guide.qmd  B-source-code.qmd  references.qmd
+|   |-- references.bib   single merged bibliography
+|   |-- images/  figures/  code/
+|   `-- nuthesis.cls  apa.csl  partials/
+|-- ggpcp-ties/          the ggpcp additions, laid out as package files
+|   |-- R/pcp_spread_ties.R
+|   |-- tests/test_pcp_spread_ties.R
+|   |-- vignettes/numerical-ties.qmd
+|   `-- examples/example_usage.R
+|-- scripts/             make_ch2_figures.R, make_method_figures.R
+|-- data/asthma.csv
+|-- assets/              logos, unl-theme.scss, style.css, _extensions/
+`-- archive/             superseded material; not in the shared copy
+    |-- numerical_tie_attempts/
+    |-- pcp_arrange_update/
+    `-- literature-review/   Chapter2.*, README.md, outdated writing/
+```
+
+`Bunny Trails/` and `comprehensive_exam/` stay outside the shared copy, either in a separate private folder or listed in `.gitignore` if the repository itself is shared.
+Within `comprehensive_exam/`, a `revisions/` folder holds dated markdown logs of the changes made to the proposal and memo, one file per revision session, each linking to the conversation in which the changes were made; the first is `2026-11_proposal_revisions_chat.md`.
+The figure scripts are kept in `dissertation/scripts/` in the source that accompanies this draft.
+
+## Cleanup Actions {#sec-appendix-actions}
+
+The following actions are listed in order of priority.
+
+1. **Fix the test path.** `test_pcp_spread_ties.R` begins with a `source()` call whose directory, `/home/claude/work/`, exists only on the machine the file was written on, so the suite fails anywhere else. In the proposed layout the line becomes `source("../R/pcp_spread_ties.R")`, run from `tests/`.
+2. **Replace `numerical_ties_method.qmd` with Chapter 3 of this draft** (`dissertation/03-method.qmd`). The source file describes an earlier version of the algorithm. Chapter 3 corrects six points:
+    a. the allocation is clamped to $[0,1]$, and the margins and spacing are fractions of the realized height $S(v)$, not of $\delta_j$;
+    b. there is no boundary buffer $\beta$; the clamped case needs no special rule;
+    c. tied observations are ordered by one reference axis $A_j$, not by several neighbors;
+    d. the initial axis of a sweep is spread in input order, with no fallback to the opposite neighbor;
+    e. annotation boxes all have height $\delta_j$ and do not encode frequency; and
+    f. the code excerpt is replaced by the current loop from `spread_one_axis()`.
+   
+   Chapter 3 also adds the diagnostics and material from Section 4 of the November 2026 proposal: the regimes in which the method applies, the notation, the two propositions, the unified framework, the high-multiplicity limit, the visual-cue design with its count label (marked as not yet implemented), the worked example, the penguins application, and the flea beetle comparison.
+3. **Replace `figures/`.** The previous `fig_annotated.png` was drawn under the frequency-proportional design that the November 2026 proposal removed. All data figures in Chapter 3 were regenerated from the current code by `make_method_figures.R`; the penguins and flea beetle figures are drawn with `pcp_spread_ties()` rather than with the copy of the algorithm written inside the proposal. The two Chapter 2 figures are generated from the proposal's own code by `make_ch2_figures.R`, with a fixed random seed for the unsorted `mtcars` panel.
+4. **Use one bibliography.** Replace the two `references.bib` files with the merged file described above.
+5. **Stop tracking session state and render output.** Delete `.RData`, `.Rhistory`, `.Rproj.user/`, the nested `.Rproj`, the `*_files/` caches, and rendered PDFs that sit next to their sources, and add them to `.gitignore`.
+6. **Archive superseded material.** Move `Chapter2.*`, the `Literature Review/README.md` notes, `outdated writing/`, the earlier scripts in `numerical_tie_attempts/`, and the `pcp_arrange_update` notes to `archive/`. Correct the typo in `ModifictationsPCP.R` when moving it.
+7. **Rename folders without spaces**, as in the proposed structure.
+8. **Align names.** The proposal uses the working names `tie_spread` and `get_tie_box()`; the code uses `pcp_spread_ties()`, `pcp_tie_boxes()`, and `geom_pcp_tieboxes()`. The next revision of the proposal should use the package names.
+
+## Verification {#sec-appendix-tests}
+
+The test suite and the example script were run on November 8, 2026, with R 4.3.3, `ggpcp` 0.2.0 (installed from its GitHub repository), and `ggplot2` 3.4.4, after the source path in the test file was corrected.
+All 36 checks pass.
+`example_usage.R` runs to completion; because `janitor` was not available in the build environment, `janitor::clean_names()` was replaced by an equivalent one-line function for this run.
+The only messages are the diagnostic warnings described in Chapter 3: the inter-band gap warning on every numerical axis of `iris` and of the penguins at $\sigma = 0.9$, and saturation warnings for heavily tied values on several axes, including nine values of penguin body mass.
+
+| Group | What is checked | Checks | Result |
+|:--:|:-----------------------------------------|:--:|:--:|
+| 1 | Three tied groups on one axis: interior region, uniform spacing $\sigma\delta_j/(k-1)$, and within-band order matching the reference axis; untied values and untied axes unchanged; inter-band gap preserved; `pcp_yend` mirrors `pcp_y`; band metadata | 15 | Pass |
+| 2 | `from-left` orders against the left neighbor | 1 | Pass |
+| 3 | Initial axis spread in input order; sequential keys use adjusted positions | 3 | Pass |
+| 4 | Factor axes untouched; `vars` restricts spreading | 2 | Pass |
+| 5 | Boundary clamping with proportional margins; single-value axis left centered with a warning | 3 | Pass |
+| 6 | Values within the tolerance $\varepsilon$ grouped as one tie | 1 | Pass |
+| 7 | Gap and saturation warnings fire when they should, and not otherwise | 3 | Pass |
+| 8 | `from-both`: center in input order, both sides reference the center, `center` at the end reduces to `from-left`, `center_reference` seeds the center | 4 | Pass |
+| 9 | Band width scales linearly with $\sigma$ | 1 | Pass |
+| 10 | `pcp_tie_boxes()`: rectangles, original-value labels, `min_n` filter | 2 | Pass |
+| 11 | `tie_spread()` alias matches `pcp_spread_ties()` | 1 | Pass |
+| | **Total** | **36** | **Pass** |
+
+: Results of `test_pcp_spread_ties.R` against the current implementation. {#tbl-tests}

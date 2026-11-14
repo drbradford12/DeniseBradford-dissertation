@@ -1,0 +1,56 @@
+# Introduction {#sec-intro}
+
+Seventy-four flea beetles were measured, in micrometers, on the width of their first tarsal joint.
+Forty-eight of them share that measurement with at least one other beetle.
+Draw the beetles as a parallel coordinate plot and, on that axis, those forty-eight lines pass through twenty points: a beetle enters a point as one line and leaves it as any of several, and no reader can say which.
+The plot was drawn so that an observation could be followed from variable to variable, and at exactly the places where observations agree, it cannot be.
+
+This dissertation is about that failure and one way to repair it.
+The repair can be stated in a sentence: give every tied value a band no taller than the smallest gap on its axis, spread the tied observations inside it in the order their neighbor dictates, and mark the band so that no one mistakes the spread for data.
+The rest of the document shows why each clause is needed and what it costs.
+
+Parallel coordinate plots (PCPs) are a powerful technique for investigating patterns across multiple attributes (variables) simultaneously [@inselberg2009].
+PCPs assign each dimension of an $n$-dimensional dataset to a vertical axis, with the axes arranged in parallel [@wegman1990].
+Observations are drawn as polylines connecting a single point along each dimensional axis in sequence, providing a perspective on hard-to-visualize multidimensional data that can be used to identify clusters, outliers, and other facets of a dataset.
+
+When multiple observations share the same value in a given dimension, their polylines perfectly overlap at that changepoint, creating "visual collisions" that mask information about the joint distribution between variables and obscure the density along a single axis.
+The treatment of ties is an aspect not generally addressed in the original parallel coordinate plots of Inselberg [-@inselberg1985] and Wegman [-@wegman1990].
+
+PCPs were canonically used to show continuous random variables, but their generalization to categorical data only exacerbated the problem of ties.
+The most straightforward treatment of categorical random variables, which is taken by Categorical PCPs [@pilhofer2013], is to assign each level a numeric value; this results in ties at any non-unique value for each variable (@fig-categorical-fix, panel a).
+However, alternative treatments developed separately within categorical data visualization research: Parallel Sets [@kosara2006], alluvial diagrams, and the conceptually similar Sankey diagrams.^[Sankey diagrams do not always have parallel axes, but they are visually similar and frequently use parallel axis constructions.]
+Variations on these plots, such as common angle plots [@hofmann2013], address perceptual distortions that arise when line widths are evaluated along the vertical rather than the orthogonal direction, offering an alternative encoding that more faithfully communicates categorical association strengths.
+Hammock plots [@schonlau2003], another type of PCP that accommodates categorical and continuous variables, show multiple bivariate relationships using parallelograms drawn between axes.
+Parallel Sets and Hammock plots preserve the marginal and bivariate frequency information, but do not allow reconstruction of the full multivariate density, because individual observations are not shown; because of the ties, CPCPs also do not allow for reconstruction of the full multivariate density, as it is impossible to distinguish a single observation as it passes through a cluster of observations on a categorical axis.
+
+The development of generalized PCPs (via the software implementation `ggpcp` [@vanderplas2023]) represents a major step forward in representing the full joint distribution of the data while showing individual observations.
+One innovation in the `ggpcp` package is its handling of ties on categorical axes: each level is allocated a box proportional to its marginal frequency, and the observations sharing that level are spread evenly within the box so that individual lines remain visible.
+Sorting methods are implemented to distribute the tied values in a way that reduces the overall complexity of the plot, as random line-crossings can make PCPs difficult to read and interpret.
+Ties on an axis that remains numeric, however, are not spread: observations sharing a value are plotted at the same point and their lines overlap.
+This is the gap this dissertation addresses.
+
+The obvious remedy, and the one `ggpcp` already offers, is to coerce the numeric variable to a factor and let the categorical machinery spread it.
+That remedy turns out to be the right one only for variables with a handful of levels.
+For a measurement with dozens of distinct values it discards the thing a numeric axis exists to show, the distances between values, and replaces the axis with a ladder of equally spaced slivers.
+The real difficulty is not that ties exist but that on a numeric axis the vertical space is already spoken for, so the categorical device of growing a box to fit its frequency cannot be borrowed.
+That is the problem this dissertation takes up.
+
+The dissertation extends the treatment of categorical variables in generalized PCPs by implementing a solution to tie-breaking in continuous variables.
+The solution has the following properties:
+
+- marginal density information (approximately) faithfully represented on the vertical axis
+- individual lines which can be visually distinguished, at least for data where the number of observations does not lead to overplotting
+- observations sorted hierarchically within the tied treatment in order to minimize extraneous line-crossings that lead to perceptual complexity.
+
+An immediate consequence of the second objective is that the viewer will be able to (at least in theory) reconstruct the full joint distribution between variables from the plot.
+We extend the method used in `ggpcp` to represent categorical data to continuous variables, modifying it to maintain the approximate scaling of the continuous variable, with slight local distortions when tied values occur.
+In addition, we develop a consistent visual representation to provide visual cues which indicate the presence of a local distortion due to tied values, while preserving the visual representation of singular values on the parallel axis.
+
+Combining the density-preserving advantage of Hammock plots with the individual-observation traceability of generalized PCPs yields a display that carries marginal density on a numerical axis while retaining the full joint distribution and per-observation tracing that motivate GPCPs.
+Real-world data sets frequently have both categorical and numerical data, and duplicated values in either type of variable.
+Our extension of GPCPs extends the ability to visually represent, examine, and assess these data sets.
+
+The remainder of the dissertation is organized as follows.
+Chapter 2 reviews the literature that constrains a method for spreading ties on numerical axes and states the research questions and contributions.
+Chapter 3 specifies the resolution-anchored algorithm, its implementation as an additional step in the `ggpcp` pipeline, and the visual cue that marks its result.
+Chapter 4 will report the evaluation, a computational benchmarking of the layout and a viewer study against the treatments a user has today, and Chapter 5 will discuss the results together with the larger perceptual study left for future work.

@@ -1,0 +1,11 @@
+# Source Code of the `ggpcp` Additions {#sec-appendix-code}
+
+This appendix reproduces `pcp_spread_ties.R` exactly as it stands in the repository (`Updated numerical ties/pcp_spread_ties.R`).
+It defines the numerical tie-breaking step `pcp_spread_ties()` and its alias `tie_spread()`, the combined wrapper `pcp_arrange_unified()`, and the annotation functions `pcp_tie_boxes()` and `geom_pcp_tieboxes()`, together with the internal helpers they rely on.
+Equation and section numbers in the comments refer to the research proposal.
+
+```{r}
+#| file: code/pcp_spread_ties.R
+#| eval: false
+#| echo: true
+```

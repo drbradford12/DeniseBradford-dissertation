@@ -1,0 +1,352 @@
+---
+title: "Breaking ties on numeric axes"
+subtitle: "Numerical tie-breaking with `pcp_spread_ties()` in ggpcp"
+author: "Denise Bradford"
+date: today
+format:
+  pdf:
+    toc: true
+    number-sections: false
+    colorlinks: true
+    fig-width: 7
+    fig-height: 4
+  html:
+    toc: true
+    toc-location: left
+    fig-width: 7
+    fig-height: 4
+    embed-resources: true
+execute:
+  message: false
+  warning: true
+knitr:
+  opts_chunk:
+    collapse: true
+    comment: "#>"
+    dpi: 96
+---
+
+```{r}
+#| label: prerequisites
+#| include: false
+has_ggally   <- requireNamespace("GGally", quietly = TRUE)
+has_penguins <- requireNamespace("palmerpenguins", quietly = TRUE)
+source(here::here("comprehensive_exam/numerical_tie_attempts/pcp_spread_ties.R"))
+```
+
+```{r}
+#| label: setup
+library(ggpcp)
+library(ggplot2)
+library(dplyr)
+```
+
+## Why ties on numeric axes are a problem
+
+The `iris` flowers were measured to the nearest millimetre.
+On petal width, 150 flowers take 22 distinct values, and 148 of them share their value with another flower. 
+In a parallel coordinate plot, 150 lines pass. through 22 points on that axis. 
+A line enters a point, several lines leave it, and nothing in the plot says which one to follow.
+
+A parallel coordinate plot promises that an observation can be followed from axis to axis. 
+At a tie the promise breaks: the tie is a fork in the road.
+
+`pcp_spread_ties()` repairs it. Every tied observation gets its own place on the axis, inside a band no taller than the grid on which the variable was
+measured, and ordered so that lines do not cross inside the band.
+
+This vignette is for the analyst whose numeric variables are counts, scores, or measurements recorded on a grid, and who today chooses between overlapping lines and turning the variable into a factor.
+
+### Where the published pipeline stops
+
+`ggpcp` separates the data wrangling for a parallel coordinate plot from its rendering. 
+Three steps prepare the data -- `pcp_select()`, `pcp_scale()` and `pcp_arrange()` -- and the last of these breaks ties on **categorical** axes: observations sharing the same level are spread out evenly and ordered by their values on the neighboring axes, so that every observation can be followed through the plot.
+
+Numeric axes get no such treatment, and they carry ties too. 
+Measurements are recorded at a finite resolution, counts and scores take only a handful of values, and discretized variables are often kept numeric so that their order and spacing are preserved. 
+Wherever several observations share a value, their line segments meet in a single point on the axis and fan out again on either side. 
+These *bow-ties* hide how many observations the point stands for and which incoming segment continues as which outgoing one.
+
+Petal width is the worst case in `iris`, not the only one: all four measurements are recorded to the nearest 0.1 cm, so each axis has only 22 to 43 distinct values for 150 flowers.
+
+```{r}
+#| label: fig-iris-before
+#| fig-cap: "iris with ties broken on the factor axis only: every numeric axis shows bow-ties where observations share a value."
+iris_pcp <- iris %>%
+  pcp_select(Sepal.Length:Species) %>%
+  pcp_scale() %>%
+  pcp_arrange("from-right")   
+
+iris_pcp %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = Species), alpha = 0.6) +
+  geom_pcp_boxes() +
+  geom_pcp_labels() +
+  theme_pcp()
+```
+
+## `pcp_spread_ties()`: a fourth data wrangling step
+
+The categorical step stops where the numeric axes begin. `pcp_spread_ties()` adds a step to the pipeline that picks up there. 
+It is placed after `pcp_arrange()` and uses the same vocabulary for its `method` argument.
+
+```{r}
+#| label: fig-iris-after
+#| fig-cap: "The same data after `pcp_spread_ties(\"from-right\", sigma = 0.9)`: each tied value occupies a band of height $\\delta_j$, ordered by the axis to the right."
+iris_ties <- iris_pcp %>%
+  pcp_spread_ties("from-right", sigma = 0.9, min_gap = 0)
+
+iris_ties %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = Species), alpha = 0.6) +
+  geom_pcp_boxes() +
+  geom_pcp_labels() +
+  theme_pcp()
+```
+
+Every tied value now occupies a small band on the axis. 
+Within a band the observations are ordered by their position on the neighboring axis (to the right, for `"from-right"`), which untangles the segments between the two axes in the same way `pcp_arrange()` does for factor variables. 
+(The `min_gap = 0` argument silences a diagnostic warning that is discussed in @sec-diagnostics.)
+
+### How the bands are built
+
+Jitter would also separate the lines, but at random, and by a width that means nothing in the data. 
+The algorithm here, called *tie spread*, anchors the bands at the resolution of the data instead:
+
+1. **Resolution.** For every numeric axis the resolution $\delta_j$ is the smallest difference between two distinct (scaled) values on that axis. For `Sepal.Length`, for example, $\delta_j$ corresponds to 0.1 cm.
+2. **Band.** A tied value $v$ is given the band $[\max(0, v - \delta_j/2),\ \min(1, v + \delta_j/2)]$. Bands of neighboring values therefore touch but never overlap, and a value keeps its vertical position: an observation never moves closer to a different value than to its own.
+3. **Margins.** A fraction `sigma` of each band is used for placing the observations; the remaining $(1 - \sigma)$ is split into two margins so that adjacent bands stay visually separate.
+4. **Order and spacing.** The $k$ tied observations are placed at equal spacing across the inner region, ordered by their (already adjusted) position on the reference axis.
+
+The axes are processed in a single sweep. For `"from-right"` the rightmost axis is processed first and every other axis references the axis to its right; `"from-left"` mirrors this. `"from-both"` starts at a `center` axis and moves outward, with each axis referencing its neighbor closer to the center. 
+The first axis of the sweep has no reference axis; its ties are spread in the order of the rows of the data, or in the order of a nominated neighbor (`center_reference`).
+
+```{r}
+#| label: fig-from-both
+#| fig-cap: "`from-both`, starting at `Petal.Length` and seeding its within-band order from `Petal.Width`."
+iris_pcp %>%
+  pcp_spread_ties("from-both", center = "Petal.Length",
+                  center_reference = "Petal.Width", min_gap = 0) %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = Species), alpha = 0.6) +
+  geom_pcp_boxes() +
+  geom_pcp_labels() +
+  theme_pcp()
+```
+
+### One call for both variable types
+
+Most data have ties of both kinds. `pcp_arrange_unified()` runs
+`pcp_arrange()` and `pcp_spread_ties()` in one go
+and is a drop-in replacement for `pcp_arrange()`:
+
+```{r}
+#| label: unified
+#| eval: false
+iris %>%
+  pcp_select(Sepal.Length:Species) %>%
+  pcp_scale() %>%
+  pcp_arrange_unified("from-right", sigma = 0.9)
+```
+
+## The separation parameter `sigma`
+
+A band filled to its edges touches its neighbors, and two tied values read as
+one. `sigma` controls how much of each band is used for the observations.
+Values close to 1 fill the band almost completely and the gaps between adjacent
+bands shrink; smaller values leave wider gaps and tighter bundles.
+
+```{r}
+#| label: fig-sigma
+#| fig-height: 3
+#| fig-cap: "Smaller `sigma` leaves wider gaps between bands and tighter bundles inside them."
+#| fig-subcap:
+#|   - "sigma = 0.5"
+#|   - "sigma = 0.9"
+#| layout-ncol: 2
+for (s in c(0.5, 0.9)) {
+  p <- iris_pcp %>%
+    pcp_spread_ties("from-right", sigma = s, min_gap = 0) %>%
+    ggplot(aes_pcp()) +
+    geom_pcp_axes() +
+    geom_pcp(aes(colour = Species), alpha = 0.6) +
+    theme_pcp() +
+    theme(legend.position = "none")
+  print(p)
+}
+```
+
+## Spreading only some axes
+
+Not every axis needs spreading. A near-continuous variable has no ties to
+break, and a variable with a handful of levels is better served as a factor
+(see the flea example below). The `vars` argument restricts the spreading to a
+selection of axes. It takes a tidyselect specification, as `pcp_select()`
+does: bare names, positions, selector functions such as `starts_with()`, or a
+character vector. Axes that are not selected -- and factor axes in general --
+are left untouched.
+
+```{r}
+#| label: fig-vars
+#| fig-cap: "Only the two width axes are spread (`vars = ends_with(\"Width\")`)."
+iris_pcp %>%
+  pcp_spread_ties("from-right", vars = ends_with("Width"), min_gap = 0) %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = Species), alpha = 0.6) +
+  theme_pcp()
+```
+
+## Annotating the bands
+
+Spreading moves observations off their values, and the reader should be told
+so. A box around the band is the cue: positions inside it are spread for
+legibility, not because the values differ.
+
+The geometry of every band is stored in the attribute `"pcp_ties"` of the
+result. `pcp_tie_boxes()` turns it into a data frame of rectangles and
+`geom_pcp_tieboxes()` draws them, mirroring `geom_pcp_boxes()` and
+`geom_pcp_labels()` for factor axes. The labels show the original tied values,
+which are recovered from the `pcp_level` column of the data. The boxes should
+be added *before* `geom_pcp()` so that they sit behind the lines, and `min_n`
+suppresses boxes for small bands.
+
+```{r}
+#| label: fig-boxes
+#| fig-cap: "Tie bands with at least eight observations, annotated with the original tied value."
+head(attr(iris_ties, "pcp_ties"))
+
+boxes <- pcp_tie_boxes(iris_ties, boxwidth = 0.2, min_n = 8)
+
+iris_ties %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_tieboxes(boxes, labels = TRUE) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = Species), alpha = 0.6) +
+  geom_pcp_boxes() +
+  geom_pcp_labels() +
+  theme_pcp()
+```
+
+## Diagnostics {#sec-diagnostics}
+
+The method has two limits, and the function reports both rather than drawing
+a plot that will be misread. `pcp_spread_ties()` warns:
+
+* when the gap between adjacent bands, $(1 - \sigma)\delta_j$, is smaller than
+  `min_gap` (0.005 of the axis by default), adjacent bands may visually merge
+  -- a smaller `sigma`, or fewer displayed values, helps;
+* when the spacing between tied observations inside a band falls below
+  `min_spacing` (0.001 by default), the band is saturated and individual
+  observations will overplot.
+
+For `iris` the first warning fires on every axis with the default settings:
+the measurements are fine-grained relative to their range, so $\delta_j$ is
+small. The warning can be acknowledged by lowering `min_gap`, as in the
+examples above, or avoided by choosing a smaller `sigma`.
+
+```{r}
+#| label: warnings
+res <- iris_pcp %>% pcp_spread_ties("from-right")
+```
+
+## Numeric ties versus converting to a factor
+
+Converting a numeric variable to a factor is the obvious way to break its
+ties, and `pcp_arrange()` already supports it. Sometimes it is the right way.
+
+The package README treats the `aede2` variable of the `flea` data (a front
+angle recorded in steps of 7.5 degrees) by turning it into a factor. The
+variable takes nine evenly spaced values, so little is lost: the levels keep
+their order, and the box heights show how many beetles share each angle. For a
+variable with a handful of levels, the factor remains the treatment to use.
+
+The other measurements are a different case. `tars1` takes 46 distinct values
+for 74 beetles. As a factor it becomes a ladder of 46 thin boxes, and the
+metric scale is gone: the beetle at 242, 19 units above its nearest neighbor,
+sits one rung above it like every other beetle. `pcp_spread_ties()` keeps such
+a variable numeric, so the distances between values stay on the axis while the
+bands make the ties traceable.
+
+The two treatments combine in one plot. Below, `aede2` is converted to a
+factor, and `pcp_arrange_unified()` arranges it and spreads the ties on the
+remaining numeric axes in the same call. `head`, with 13 values, sits at the
+boundary, where either treatment is defensible; it is kept numeric here.
+
+```{r}
+#| label: fig-flea
+#| eval: !expr has_ggally
+#| fig-cap: "flea: `aede2` as a factor, the other five measurements kept numeric with ties spread and annotated; `species` appears on both ends."
+data(flea, package = "GGally")
+
+flea_ties <- flea %>%
+  mutate(aede2 = factor(aede2)) %>%    # few levels: break its ties as a factor
+  pcp_select(species, 2:7, species) %>%
+  pcp_scale() %>%
+  pcp_arrange_unified("from-right", min_gap = 0)
+
+flea_boxes <- pcp_tie_boxes(flea_ties, boxwidth = 0.15, min_n = 3)
+
+flea_ties %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_tieboxes(flea_boxes, labels = TRUE) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = species), alpha = 0.7) +
+  geom_pcp_boxes(boxwidth = 0.15) +
+  geom_pcp_labels() +
+  theme_pcp()
+```
+
+## Penguins
+
+The penguins put both limits of the method on one plot. Integer-valued
+measurements such as flipper length and body mass create frequent ties in the
+`palmerpenguins` data. The unified call treats the factor axes and the numeric
+axes together. Body mass is recorded in steps of 25 g over a range of 3600 g,
+so its resolution $\delta_j$ is tiny and bands with many observations become
+saturated -- the second diagnostic warning reports which values are affected.
+The bands still mark where the ties are; they can no longer show each bird.
+
+```{r}
+#| label: fig-penguins
+#| eval: !expr has_penguins
+#| fig-height: 4.5
+#| fig-cap: "penguins: factor and numeric ties treated in one call; boxes shown for bands of at least eight birds."
+data(penguins, package = "palmerpenguins")
+
+peng_ties <- penguins %>%
+  na.omit() %>%
+  pcp_select(bill_length_mm:body_mass_g, island, species) %>%
+  pcp_scale() %>%
+  pcp_arrange_unified("from-right", sigma = 0.9, min_gap = 0)
+
+peng_boxes <- pcp_tie_boxes(peng_ties, boxwidth = 0.15, min_n = 8)
+
+peng_ties %>%
+  ggplot(aes_pcp()) +
+  geom_pcp_tieboxes(peng_boxes, labels = TRUE) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = species), alpha = 0.5) +
+  geom_pcp_boxes() +
+  geom_pcp_labels() +
+  scale_colour_manual(values = c("#E69F00", "#CC79A7", "#009E73")) +
+  theme_pcp() +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+## In short
+
+- **A handful of levels:** convert the variable to a factor and let
+  `pcp_arrange()` break its ties.
+- **Many values with scattered ties:** keep the variable numeric and use
+  `pcp_spread_ties()`.
+- **No ties:** do nothing.
+
+`pcp_arrange_unified()` and `vars` let one plot hold all three.
+
+## Reference
+
+Bradford D. (2026). *A Grammar of Graphics Approach to Managing Numerical
+Ties in Parallel Coordinate Plots.*

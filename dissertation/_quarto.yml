@@ -1,0 +1,67 @@
+project:
+  type: book
+  output-dir: _book
+
+book:
+  title: "A Grammar of Graphics Approach to Managing Numerical Ties in Parallel Coordinate Plots"
+  author: "Denise Bradford"
+  chapters:
+    - index.qmd
+    - 01-introduction.qmd
+    - 02-literature-review.qmd
+    - 03-method.qmd
+    - references.qmd
+  appendices:
+    - A-repository-guide.qmd
+    - B-source-code.qmd
+
+# UNL title-page fields (consumed by partials/title.tex)
+unl:
+  adviser: "Professors Susan VanderPlas and Heike Hofmann"
+  adviser-abstract: "Susan VanderPlas and Heike Hofmann"
+  major: "Statistics"
+  month: "December"
+  year: "2027"
+
+abstract: |
+  A parallel coordinate plot promises that any observation can be followed, as a single line, through every variable in the data.
+  It breaks that promise wherever two observations agree: at a shared value their lines meet in a point, and neither the identity of each line nor the number of lines survives the meeting.
+  On measured data such agreements are the rule, not the exception; on four flea beetle measurements, between two thirds and five sixths of the observations share their value with another.
+  Generalized parallel coordinate plots, implemented in the `ggpcp` package, resolve such ties on categorical axes by spreading the tied observations within a box and ordering them by their positions on the neighboring axis; ties on axes that remain numeric receive no such treatment.
+  This dissertation develops resolution-anchored tie-breaking for numerical axes.
+  Each tied value receives a band whose height is the axis resolution, the smallest gap between distinct values, so that spreading never moves an observation closer to another value than to its own.
+  A separation parameter $\sigma$ reserves a margin between adjacent bands, the tied observations are placed at equal spacing within the band, and their order is taken from the already-adjusted positions on a neighboring axis, which leaves no line crossings inside a band.
+  The method is implemented as `pcp_spread_ties()`, a fourth data-preparation step in the `ggpcp` pipeline, together with an annotation layer that marks each band and recovers its original value.
+  The dissertation reviews the literature that constrains the design, specifies and implements the algorithm, and evaluates it in two ways: computationally, by benchmarking the layout, and with viewers, against the treatments a user has for such axes today: exact values, jitter, and coercion to a factor.
+
+bibliography: references.bib
+csl: apa.csl
+link-citations: true
+
+execute:
+  echo: true
+  eval: false
+
+format:
+  pdf:
+    documentclass: nuthesis
+    pdf-engine: xelatex
+    keep-tex: true
+    toc: true
+    toc-depth: 2
+    lof: true
+    lot: true
+    number-sections: true
+    colorlinks: true
+    linkcolor: "black"
+    citecolor: "black"
+    urlcolor: "blue"
+    fig-pos: "htbp"
+    code-block-bg: "#F5F5F5"
+    highlight-style: tango
+    template-partials:
+      - partials/doc-class.tex
+      - partials/title.tex
+      - partials/before-body.tex
+      - partials/toc.tex
+    include-in-header: partials/preamble.tex

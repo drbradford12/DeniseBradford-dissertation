@@ -1,0 +1,43 @@
+% ---- Additions to nuthesis for the Quarto build -------------------------
+\usepackage{amsthm}
+\usepackage{etoolbox}
+\usepackage{indentfirst}
+\setlength{\parindent}{20pt}
+\setlength{\emergencystretch}{3em}
+
+% Suppress the page number on chapter-opening pages (as in template.tex),
+% because it collides with the running head position.
+\patchcmd{\chapter}{plain}{empty}{}{}
+
+% Single-space code, tables, and the bibliography; UNL allows single
+% spacing within these elements.
+\AtBeginDocument{%
+  \ifdefined\Shaded
+    \let\oldShaded\Shaded
+    \let\endoldShaded\endShaded
+    \renewenvironment{Shaded}{\singlespacing\footnotesize\oldShaded}{\endoldShaded}
+  \fi
+}
+\AtBeginEnvironment{longtable}{\singlespacing\small}
+\AtBeginEnvironment{tabular}{\singlespacing}
+\AtBeginEnvironment{CSLReferences}{\singlespacing\sloppy}
+\ifdefined\CSLReferences\else
+  \newlength{\cslhangindent}\setlength{\cslhangindent}{1.5em}
+\fi
+\AtBeginEnvironment{verbatim}{\singlespacing\footnotesize}
+
+% Captions single-spaced and slightly smaller.
+\usepackage{caption}
+\captionsetup{font={small,singlespacing},labelfont=bf}
+% Sub-figure captions sit side by side in panels with no gutter; give them
+% inner margins and ragged-right text so neighbouring captions do not touch.
+\usepackage{subcaption}
+\captionsetup[sub]{font={footnotesize,singlespacing},justification=raggedright,
+  singlelinecheck=false,margin={3pt,6pt}}
+
+% Inside tables only, allow line breaks after underscores so long file
+% names wrap within their column.
+\AtBeginDocument{\let\unloriginalunderscore\_}
+\AtBeginEnvironment{longtable}{%
+  \renewcommand{\_}{\unloriginalunderscore\penalty500\relax}%
+}

@@ -1,0 +1,22 @@
+\frontmatter
+\maketitle
+
+% UNL abstract page. nuthesis prints "Adviser:"; with two advisers the
+% Graduate College format reads "Advisers:", so the environment is
+% restated here with that one change.
+\makeatletter
+\begin{doublespacing}
+\thispagestyle{empty}
+\begin{center}
+\MakeUppercase{\thetitle}\\[.5\baselineskip]
+\theauthor, \nu@degreeabbreviation\\
+\nu@university, \nu@year
+\end{center}
+\begin{flushleft}
+Advisers: \unladviserabstract
+\end{flushleft}
+$abstract$
+\par
+\end{doublespacing}
+\makeatother
+\cleardoublepage

@@ -1,0 +1,525 @@
+# Resolution-Anchored Tie-Breaking {#sec-method}
+
+Among the forty-two penguins drawn later in this chapter, four have flippers 193 millimeters long.
+Measured to the millimeter, that is one value, and in a parallel coordinate plot it is one point with four lines passing through it.
+The method in this chapter moves those four lines apart by a total of less than one millimeter's worth of axis, in an order chosen so that none of them crosses another on the way to the next variable, and draws a small gray box to say that it did so.
+Everything in the chapter follows from three decisions: how tall the box may be, in what order the lines go inside it, and how the reader is told.
+
+*A note on the code and figures.*
+The code listings in this chapter are taken from the accompanying `pcp_spread_ties.R` source, which is reproduced in full in @sec-appendix-code, and every figure except the worked-example diagram (@fig-worked-example) was produced by running them on the named data set.
+The chunks are shown with `eval: false` and the resulting figures embedded as images so the chapter renders without requiring the full `ggpcp` toolchain to be installed; to reproduce the figures live, set the chunk options to `eval: true` and ensure `ggpcp`, `palmerpenguins`, and `patchwork` are available.
+
+## From Categorical Ties to Numerical Ties
+
+The previous chapter established that ties are the central obstacle to reading a parallel coordinate plot as a record of individual observations rather than a record of pairwise associations.
+When two observations share a value on an axis, their polylines pass through the same point, and the viewer loses the ability to follow either one across the display.
+The generalized parallel coordinate plot resolves this for categorical axes: `pcp_arrange()` distributes the observations within the band belonging to each category, spacing them evenly and ordering them so that line crossings between adjacent axes are minimized [@vanderplas2023].
+The result is a visualization that simultaneously displays the marginal frequency of each category (as the height of its band) and preserves the identity of every observation (as a distinct position within that band).
+
+This chapter extends the same idea to numerical axes.
+The motivating observation is simple: a numerical axis with repeated values has exactly the ties that the categorical machinery already knows how to break, and the only thing standing between the two cases is the absence of a band to spread observations within.
+On a categorical axis, the band is given by the level; every observation sharing a level shares its allocated vertical region.
+On a numerical axis, no such region is supplied, because the value is a single point on a continuous scale.
+The approach developed here is therefore to *construct* a band for each tied value, sized so that spreading observations within it never distorts the position of the value relative to its neighbors, and then to reuse the hierarchical ordering that `pcp_arrange()` already provides.
+
+We refer to this as *resolution-anchored* tie-breaking.
+The anchor is the axis resolution, the smallest gap between distinct values on the axis, which fixes how much vertical room a tied value may borrow without colliding with the values on either side.
+Anchoring to the resolution rather than to a fixed jitter width is what allows the method to preserve the joint distribution: the spread is always a fraction of the local spacing, so the eye reads the band as occupying the position of its value, not as a smear that overlaps adjacent values.
+
+The method is designed as a single pipeline step, `pcp_spread_ties()`, that slots into the existing `ggpcp` workflow immediately after categorical ties have been broken.
+The function is sourced from the accompanying implementation, and the pipeline below shows it as the final data-wrangling step before any geometry is drawn:
+
+```{r}
+#| label: setup
+#| message: false
+#| warning: false
+#| eval: false
+library(ggpcp)
+library(ggplot2)
+library(dplyr)
+source("pcp_spread_ties.R")
+
+theme_set(theme_bw(base_size = 11))
+species_colors <- c(setosa = "#E69F00", versicolor = "#CC79A7", virginica = "#009E73")
+
+iris_clean <- iris
+names(iris_clean) <- tolower(gsub("\\.", "_", names(iris_clean)))
+
+iris_pcp <- iris_clean %>%
+  pcp_select(sepal_length:species)  %>%
+  pcp_scale("uniminmax")  %>%
+  pcp_arrange("from-right")  %>%      # categorical ties (existing ggpcp)
+  pcp_spread_ties("from-right")       # numerical ties   (this chapter)
+```
+
+The two steps share a `method` argument and a common conception of how to order tied observations, so that a single call to the wrapper `pcp_arrange_unified()` can handle both variable types with one direction of hierarchical sorting.
+Because the step operates only on the long-format data frame that `pcp_select()` and `pcp_scale()` produce, and because it touches only the `pcp_y` coordinates of numerical axes, it composes cleanly with the rest of the grammar: every downstream geometry, scale, and theme continues to work unchanged.
+
+@fig-before-after makes the effect concrete on the `iris` data, whose four numerical measurements are recorded to a tenth of a centimeter and therefore tie heavily.
+Panel (a) is the plot produced when only categorical ties are broken; panel (b) adds `pcp_spread_ties()`.
+The same data, scaling, and color mapping drive both panels; the only difference is the one extra pipeline step.
+
+```{r}
+#| label: before-after-code
+#| eval: false
+panel <- function(d, title) {
+  ggplot(d, aes_pcp()) +
+    geom_pcp_axes() +
+    geom_pcp(aes(colour = species), alpha = 0.5, linewidth = 0.3) +
+    geom_pcp_labels() +
+    theme_pcp() +
+    scale_color_manual("Species", values = species_colors) +
+    labs(title = title, x = NULL, y = NULL) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1))
+}
+
+before <- iris_clean  %>%
+  pcp_select(sepal_length:species) %>%
+  pcp_scale("uniminmax") %>%
+  pcp_arrange("from-right")
+
+after  <- before  %>%
+  pcp_spread_ties("from-right", sigma = 0.9)
+
+library(patchwork)
+panel(before, "(a) Without numerical tie-breaking") +
+  panel(after, "(b) With tie-breaking (sigma = 0.9)")
+```
+
+![The `iris` data with categorical tie-breaking only (a) versus with resolution-anchored numerical tie-breaking added (b). The pinch points where polylines collapse onto shared values in (a), most visible on `petal_width` and `petal_length`, open into legible bands in (b), restoring the ability to follow an individual flower across the numerical axes.](figures/fig_before_after.png){#fig-before-after fig-scap="The iris data without and with resolution-anchored numerical tie-breaking."}
+
+## Where the Method Applies {#sec-regimes}
+
+The categorical method in `ggpcp` solves legibility and density with one device, because a nominal axis has height to spare: a level's box can be as tall as its frequency warrants, and a position inside the box displaces no meaning.
+On a numeric axis, height already encodes magnitude, and the two problems decouple.
+Numerical tie-breaking inherits the spreading and the sorting from the categorical method, and it cannot inherit frequency-as-height, because the height available at a numeric value is already spoken for by the values on either side of it.
+This is a consequence of the difference between the axes, not a flaw in the published method: @vanderplas2023 scope `pcp_arrange()` to the case where categorical variables are present and leave numeric axes at their exact scaled values.
+
+Which treatment a numeric variable needs depends on how many distinct values it takes and how its ties are distributed, and the published method is the base case.
+
+1. *Few integer levels* (a count of comorbidities, a Likert item, the number of cylinders in `mtcars`). Coercing the variable to a factor and applying `pcp_arrange()` is the right treatment, unchanged. The levels are few and usually equally spaced, so little metric information is lost, and frequency-proportional boxes give the histogram reading a viewer expects from such a variable. Numerical tie-breaking is not applied.
+2. *Many distinct values with scattered ties* (flipper length in millimeters, the flea beetle measurements of @sec-flea, ages in years). A user here leaves the values exact, which collapses each tie to a point, or jitters, which separates the lines at random; coercion replaces the metric scale with dozens of equally spaced levels and turns the boxes into slivers. This is the regime the method is built for: it spreads each tie within a band of fixed height at the value's true position, so that the gaps between values survive and lines can be traced through the tie.
+3. *Near-continuous* (a measurement recorded to many decimal places). Ties are rare or absent and there is nothing to spread.
+
+Within the second regime there is an inner limit: when a single value is shared by very many observations, the fixed-height band saturates (@sec-boundary), and a count label rather than the spread carries the information (@sec-annotation).
+The per-axis interface is how a user applies these regimes within one plot: coercion on the few-valued axes, `pcp_spread_ties()` on the many-valued ones through its `vars` argument, and nothing on the continuous ones.
+
+What is inherited and what is new can be stated exactly.
+The hierarchical sorting is inherited unchanged: the observations in a band are ordered by their positions on the already-processed neighbor, exactly as `pcp_arrange()` orders the observations in a level.
+The box grammar is inherited unchanged: a gray box on any axis marks a region whose within-box positions are spread for legibility.
+The extension therefore adds no second sorting rule and no second visual vocabulary.
+What is new is the allocation and what it encodes.
+The band is anchored to the axis resolution rather than to frequency, so its height is constant across values and the metric spacing of distinct values is preserved (@prp-metric); and because a constant-height band cannot carry frequency, frequency is given its own device, a count label at the band, with the density of lines inside the band as an approximate secondary cue.
+
+## The Algorithm {#sec-algorithm}
+
+The procedure operates on one axis at a time and decomposes into six steps.
+The first four establish, for each tied value, a vertical region and a set of positions within it.
+The last two decide which observation occupies which position.
+Throughout, $y_{ij}$ denotes the scaled value of observation $i$ on axis $j$, with all axes scaled to the unit interval $[0, 1]$ by `pcp_scale()`.
+@tbl-notation collects the notation used in the remainder of the chapter.
+
+| Symbol | Definition |
+|:-------|:-----------------------------------------------|
+| $x_{ij}$ | Raw value of observation $i$ on variable $j$ |
+| $y_{ij}$ | Scaled value, normalized to $[0, 1]$ |
+| $\tilde{y}_{ij}$ | Adjusted value after tie-breaking |
+| $T_j(v)$ | Set of observations tied at value $v$ on axis $j$ |
+| $k$ | Number of tied observations, $k = \lvert T_j(v) \rvert$ |
+| $r_j$ | Resolution of variable $j$ in data units: the grid on which its values are recorded |
+| $\delta_j$ | Resolution of axis $j$: $r_j$ expressed in scaled axis units |
+| $L(v)$, $U(v)$ | Lower and upper bounds of the allocation for value $v$ |
+| $S(v)$ | Realized height of the allocation, $U(v) - L(v)$ |
+| $S^{+}(v)$, $S^{-}(v)$ | Margins above and below the dot-placement region |
+| $\sigma$ | Separation parameter, $\sigma \in (0, 1]$ |
+| $\Delta(v)$ | Spacing between adjacent tied observations |
+| $A_j$, $\kappa_i$ | Reference axis of axis $j$; sorting key of observation $i$ |
+
+: Notation for resolution-anchored tie-breaking. {#tbl-notation}
+
+All values are taken to be observed: an observation with a missing value on any displayed axis is excluded before plotting, and the display of missing values in tie-broken plots lies outside the scope of this dissertation.
+
+**Step 1: axis resolution.**
+For axis $j$, let the distinct values be $v_1 < v_2 < \cdots < v_m$.
+The axis resolution is the smallest gap between consecutive distinct values,
+
+$$
+\delta_j = \min_{1 \le \ell < m} \left( v_{\ell + 1} - v_\ell \right).
+$$ {#eq-resolution}
+
+This quantity is the budget for the entire axis.
+Every band drawn on axis $j$ has total height $\delta_j$ (less where it is clamped at the ends of the axis, Step 3), which guarantees that no band can reach the value held by a neighbor.
+Because the values within a tie group are identical up to a floating-point tolerance, a single representative value stands in for the group when computing the gaps.
+
+The resolution is best understood as the grid on which the variable is recorded: $r_j$ in data units, and $\delta_j = r_j / (\max X_j - \min X_j)$ once expressed on the scaled axis.
+The smallest observed gap of @eq-resolution is the default estimate of that grid.
+It is the quantity `ggplot2::resolution()` computes, and the role is the same: `ggplot2` sets the default width of a bar or box from the resolution of the data and lets the user override it.
+The estimate is correct whenever the recorded values fill their grid, which is the common case for integer and fixed-decimal measurements.
+It is not robust: a single pair of values recorded more finely than the rest, or a data-entry anomaly, shrinks every band on the axis.
+The remedy is an override, a `resolution` argument in data units, prompted by a diagnostic that names the axis and the pair of values responsible when the smallest gap is far below the typical gap between adjacent values.
+Both are specified in the November 2026 proposal and are not yet implemented; the current `pcp_spread_ties()` always uses the default.
+A single resolution for the whole axis, rather than a spread range computed separately for each tied value, is what preserves both the density of observations at each value and the gaps between distinct values.
+
+**Step 2: identify ties.**
+For each distinct value $v$, the tie group is the set of observations taking that value,
+
+$$
+T_j(v) = \left\{ i : y_{ij} = v \right\},
+$$ {#eq-ties}
+
+and $v$ is *tied* when $\lvert T_j(v) \rvert > 1$.
+Observations in no tie group keep their original position and are never moved.
+
+**Step 3: allocate space.**
+Each tied value receives a vertical allocation $[L(v), U(v)]$ centered on $v$ and clamped to the unit interval,
+$L(v) = \max\left(0,\, v - \delta_j / 2\right)$ and $U(v) = \min\left(1,\, v + \delta_j / 2\right)$,
+with realized height $S(v) = U(v) - L(v)$.
+Away from the ends of the axis $S(v) = \delta_j$; for a value at $0$ or $1$ it is $\delta_j / 2$.
+Within that allocation, observations are not placed all the way to the edges.
+A band-separation parameter $\sigma \in (0, 1]$ reserves a fraction $\sigma$ of the realized allocation for the observations themselves and leaves the remaining $(1 - \sigma)\,S(v)$ as margins split equally above and below, $S^{+}(v) = S^{-}(v) = (1 - \sigma)\,S(v)/2$.
+The interior region is
+
+$$
+\left[\, L(v) + S^{-}(v), \; U(v) - S^{+}(v) \,\right],
+$$ {#eq-inner}
+
+which away from the ends of the axis is $\left[\, v - \sigma \delta_j / 2, \; v + \sigma \delta_j / 2 \,\right]$.
+Because the margins are fractions of the realized allocation, the clamped case needs no separate formula: at the boundary every quantity contracts in proportion.
+The margins are what produce a visible gap between the bands of adjacent values, supporting the Gestalt separation that lets the viewer perceive each band as a distinct group.
+
+**Step 4: compute spacing.**
+With $k = \lvert T_j(v) \rvert$ observations to place in an interior region of height $\sigma S(v)$, the equispaced gap between consecutive observations is
+
+$$
+\Delta(v) = \frac{\sigma S(v)}{k - 1}.
+$$ {#eq-spacing}
+
+The spacing therefore scales linearly with $\sigma$ and inversely with the crowding of the tie: a value shared by many observations packs them more tightly, but always within the same band height.
+
+**Step 5: order hierarchically.**
+The $k$ observations are sorted by their realized positions on a single reference axis $A_j$, the adjacent axis that has already been processed in the sweep, so that the sorting key is $\kappa_i = \tilde{y}_{i, A_j}$; ties in the key are broken by the original observation index, which gives a stable, well-defined arrangement.
+This is the same hierarchical ordering that `pcp_arrange()` applies to categorical levels, and it serves the same purpose: placing observations that are close on the reference axis close within the band means that the segments joining the band to that axis do not cross inside it.
+The direction of the sweep, and hence which neighbor is $A_j$, follows the `method` argument, discussed in @sec-direction.
+
+**Step 6: assign positions.**
+Finally, the $m$-th observation in the sorted order (for $m = 1, \ldots, k$) is placed at
+
+$$
+\tilde{y} = L(v) + S^-(v) + (m - 1)\,\Delta(v).
+$$ {#eq-assign}
+
+The first and last observations land exactly on the edges of the interior region (@eq-inner), and the intervening observations are evenly spaced by @eq-spacing.
+
+The implementation realizes Steps 3 through 6 in a single loop over the tied values of an axis.
+The excerpt below is the heart of the internal `spread_one_axis()` routine: `idx` indexes the observations in one tie group, `v` is their shared value, `k` their count, and `key` holds the realized positions on the reference axis $A_j$ (or is `NULL` on the initial axis of the sweep).
+Steps 4 and 6 collapse into one call to `seq()` across the interior region, which places the `k` observations at precisely the positions @eq-assign prescribes:
+
+```r
+for (gid in tied_ids) {
+  idx <- which(!is.na(grp) & grp == gid)    # observations sharing this value
+  v   <- rep_vals[[as.character(gid)]]      # the shared (scaled) value
+  k   <- length(idx)
+
+  # Step 3: clamped allocation, realized height, and proportional margins
+  L <- max(0, v - delta_j / 2)
+  U <- min(1, v + delta_j / 2)
+  S <- U - L
+  margin  <- (1 - sigma) * S / 2
+  L_inner <- L + margin
+  U_inner <- U - margin
+
+  # Step 5: order by the reference axis; input order breaks ties in the key
+  # and is the order used on the initial axis of the sweep
+  if (!is.null(key)) {
+    ord <- order(key[idx], idx, na.last = TRUE)
+  } else {
+    ord <- order(idx)
+  }
+
+  # Steps 4 and 6: equispaced placement across the interior region
+  out[idx[ord]] <- seq(L_inner, U_inner, length.out = k)
+}
+```
+
+The `seq()` call is what makes the spacing @eq-spacing exact: with `length.out = k`, consecutive positions differ by $(U_{\text{inner}} - L_{\text{inner}})/(k - 1) = \sigma S(v) / (k - 1)$, and the first and last observations land on the edges of the interior region.
+The result is that the tied value's band sits exactly where the value sits, occupies a height that can never overlap a neighbor, and contains its observations in an order that pulls the surrounding lines into coherent bundles.
+
+@fig-worked-example applies the construction to a small parallel coordinate plot.
+Variable B carries three tied groups, at $v = 0.70$, $0.45$, and $0.15$, with $n(v) = 5$, $3$, and $2$ observations; the smallest gap between distinct values is $\delta_j = 0.25$, and $\sigma = 0.9$.
+All three bands have the same allocation $S(v) = \delta_j$ regardless of $k$: the method encodes marginal density through the density of observations within a band, not through band height.
+Processing is `from-right`, so the observations within each band are ordered by their values on Variable C, the right neighbor, and the polylines leaving the band carry no avoidable crossings; the within-band rank is the visible signature of Step 5.
+The construction is symmetric: under `from-left` the same per-band procedure applies with the left neighbor as the reference, which is why one implementation serves all three processing modes.
+
+![A worked example of resolution-anchored spreading. Variable B carries three tied groups at $v = 0.70$, $0.45$, and $0.15$ with $n(v) = 5$, $3$, and $2$ observations; every band has the same allocation $S(v) = \delta_j = 0.25$, and $\sigma = 0.9$. On the top band the red arrow marks the allocation $S(v)$, the blue arrow the spacing $\Delta(v)$, and the yellow strips the margins $S^{\pm}(v)$. The horizontal line and label at the center of each band mark the tied value $v$, a position on the axis, as distinct from $S(v)$, a height. Under `from-right` processing the observation with the highest value on Variable C is placed at the top of each band, so the polylines leaving the band onto Variable C run in monotone order.](figures/fig_worked_example.png){#fig-worked-example width="100%" fig-scap="A worked example of resolution-anchored spreading on three axes."}
+
+## Properties of the Construction {#sec-guarantees}
+
+Two guarantees follow from Steps 1 through 6.
+They are stated as propositions so that what the method promises is exact.
+Throughout, the standing hypothesis is that no two distinct values on axis $j$ are closer than the resolution, $\lvert v - v' \rvert \ge \delta_j$ for all distinct values $v$, $v'$ on the axis.
+Under the default of Step 1 this holds, with equality for the closest pair; a user override larger than the smallest gap would violate it, which is the condition the resolution diagnostic is specified to report.
+
+::: {#prp-metric}
+
+## Metric preservation
+
+Let $v < v'$ be distinct values on axis $j$, and let $\tilde{y}_{ij}$ denote adjusted positions after Step 6, with untied observations left at their values. Then
+
+(i) every adjusted position of an observation at $v$ lies strictly below every adjusted position of an observation at $v'$, so the order of values on the axis is preserved;
+(ii) every observation is displaced by at most half the resolution, $\lvert \tilde{y}_{ij} - y_{ij} \rvert \le \delta_j / 2$, and by at most $\sigma\delta_j / 2$ away from the axis boundary;
+(iii) away from the axis boundary, the band at $v$ is centered at $v$, so the distances between band centers equal the distances between the values exactly;
+(iv) the gap between the bands at $v$ and $v'$ is at least $(v' - v) - \sigma\delta_j \ge (1 - \sigma)\,\delta_j$.
+
+:::
+
+::: {.proof}
+By Steps 3 and 4, positions in the band at $v$ lie in $[L(v) + S^{-}(v),\, U(v) - S^{+}(v)]$, which is contained in $[L(v), U(v)] \subseteq [v - \delta_j/2,\, v + \delta_j/2]$; clamping at the axis ends only shrinks the interval.
+This gives (ii), with the sharper bound $\sigma\delta_j/2$ when the interval is not clamped, since the margins then equal $(1 - \sigma)\delta_j/2$ on each side.
+When the interval is not clamped, $L(v) = v - \delta_j/2$ and $U(v) = v + \delta_j/2$, and the margins are equal, so the band is symmetric about $v$; this is (iii).
+For (i) and (iv), the top of the band at $v$ is at most $v + \sigma\delta_j/2$ and the bottom of the band at $v'$ is at least $v' - \sigma\delta_j/2$, so the gap between them is at least $(v' - v) - \sigma\delta_j$, which by the standing hypothesis is at least $(1 - \sigma)\,\delta_j > 0$ for $\sigma < 1$.
+An untied observation sits at its value and satisfies all four statements trivially.
+:::
+
+::: {#prp-crossings}
+
+## No within-band crossings
+
+Let axis $j$ be processed with reference neighbor $A_j$, already processed, and let $i$, $i'$ be two observations tied at the same value $v$ on axis $j$. Then the segments joining their positions on $A_j$ to their positions on $j$ do not cross: $(\tilde{y}_{i,A_j} - \tilde{y}_{i',A_j})(\tilde{y}_{ij} - \tilde{y}_{i'j}) > 0$.
+
+:::
+
+::: {.proof}
+After an axis is processed, its adjusted positions are pairwise distinct: within a band, consecutive positions differ by $\Delta(v) > 0$ (@eq-spacing, with $k \ge 2$); bands at distinct values are disjoint by @prp-metric (i); and untied observations sit at distinct values.
+Hence the sorting keys $\kappa_i = \tilde{y}_{i,A_j}$ are distinct for distinct observations, and Step 5 orders $T_j(v)$ so that $\kappa_{i_1} < \kappa_{i_2} < \cdots < \kappa_{i_k}$.
+Step 6 assigns $\tilde{y}_{i_m,j} = L(v) + S^{-}(v) + (m - 1)\Delta(v)$, which is strictly increasing in $m$.
+The two orderings agree, so the product in the statement is positive.
+:::
+
+@prp-crossings concerns one band and one pair of adjacent axes.
+It says nothing about crossings between observations in different bands, or between an observation in a band and an untied one; those are determined by the data and the axis order, and the one-pass sweep does not minimize them globally (@sec-ordering).
+The initial axis of a sweep has no reference neighbor and takes its within-band order from the input; @prp-crossings then applies to the next axis, which is sorted against it.
+
+## Why Anchor to the Resolution {#sec-anchor}
+
+The choice to size every band by the axis resolution, rather than by a user-specified jitter amount or by the local density of values, is what distinguishes this method from naive jittering and is worth dwelling on.
+
+Jittering breaks ties by adding random noise to each tied value.
+It restores the ability to count observations, but at a cost: the noise has a fixed scale that bears no relationship to the spacing of the data, so a jitter wide enough to separate a crowded tie at one value will, at another value where the neighbors are close, push observations across the gap and into the territory of an adjacent value.
+The viewer can no longer trust that vertical position encodes the value, because the encoding has been corrupted by an amount unrelated to the scale of the axis.
+Resolution anchoring removes this failure mode by construction.
+Since every band lies within $[v - \delta_j/2,\, v + \delta_j/2]$, and since $\delta_j$ is by definition no larger than the gap to the nearest neighbor, a band can never reach the value held by the value next to it.
+Vertical position therefore remains a faithful encoding of the data value, up to a spread that is always strictly smaller than the resolution of the axis.
+
+This is the property that lets the method preserve the joint distribution rather than merely the marginal counts.
+Hammock plots and the related categorical parallel-axis methods preserve density by drawing bivariate elements between adjacent axes, but in doing so they collapse each axis to its marginal and make the full multivariate path impossible to reconstruct [@schonlau2003].
+The generalized parallel coordinate plot keeps the individual path intact for categorical variables; resolution-anchored spreading extends that guarantee to numerical variables without sacrificing the marginal reading, because the density of lines within each band still reports the multiplicity of its value while the within-band positions report individual identity.
+
+## A Unified Framework {#sec-unified}
+
+The construction treats numerical values and categorical levels identically at the level of the formula.
+In `ggpcp`, a categorical level $i$ receives an allocation $S_i$ proportional to its marginal frequency, margins $S_i^{+}$ and $S_i^{-}$ are reserved through the `space` argument, and its $n_i$ observations are placed at the spacing of @eq-categorical-spacing,
+
+$$
+d_i = \frac{S_i - S_i^{+} - S_i^{-}}{n_i - 1}.
+$$
+
+The numerical spacing @eq-spacing has exactly this structure, $\Delta(v) = \left(S(v) - S^{+}(v) - S^{-}(v)\right) / (k - 1)$.
+The same five quantities, the allocation, the two margins, the count, and the spacing, are present in both cases; what differs is how each is determined, as @tbl-unified sets out.
+
+| | Categorical | Numerical |
+|:----------|:-----------------------------|:-----------------------------|
+| Total allocation | $S_i$, set by frequency proportion under the user's budget | $S(v) = \delta_j$, set by the axis resolution; constant across values except where clamped |
+| Margin above | $S_i^{+}$, user-controlled via `space` | $S^{+}(v) = (1 - \sigma)\, S(v) / 2$, derived from $\sigma$ |
+| Margin below | $S_i^{-}$, user-controlled via `space` | $S^{-}(v) = (1 - \sigma)\, S(v) / 2$, derived from $\sigma$ |
+| Count | $n_i$, the level frequency | $n(v) = k$, the tie multiplicity |
+| Spacing | $d_i = (S_i - S_i^{+} - S_i^{-}) / (n_i - 1)$ | $\Delta(v) = (S(v) - S^{+}(v) - S^{-}(v)) / (n(v) - 1)$ |
+
+: The unified spacing framework: identical formula structure, type-specific parameter semantics. {#tbl-unified}
+
+The shared formula is *spacing = (allocation − margins) / (n − 1)*.
+The extension to numerical variables lies entirely in the right-hand column: the per-value allocation is anchored to the axis resolution rather than to frequency, and the margins are derived from a single perceptual parameter $\sigma$ rather than from frequencies and user input.
+Hierarchical sorting is inherited unchanged.
+This correspondence is what allows `pcp_arrange_unified()` to break ties on both axis types with one call and one direction of sorting.
+
+## Direction and Sequential Processing {#sec-direction}
+
+The `method` argument controls both the order in which axes are processed and which neighbor supplies the sorting key, mirroring the `"from-left"`, `"from-right"`, and `"from-both"` options of `pcp_arrange()`.
+Under `"from-left"`, axes are processed left to right and each axis is sorted against its left neighbor; under `"from-right"`, the order and reference are reversed; under `"from-both"`, processing starts at a center axis (by default the middle one, or one named through the `center` argument) and proceeds outward, each axis referencing the neighbor nearer the center.
+Every axis is processed exactly once.
+
+The first axis of the sweep, the leftmost under `"from-left"`, the rightmost under `"from-right"`, and the center under `"from-both"`, has no processed neighbor to sort against.
+Its ties are spread in input order, so that $\kappa_i$ is the original observation index.
+There is deliberately no fallback to the neighbor on the other side: that neighbor has not yet been processed, so its positions would themselves still be tied.
+Under `"from-both"`, the `center_reference` argument may instead nominate one neighbor of the center whose current positions seed the center's within-band order.
+
+The reason direction matters, and the reason the axes must be processed in sequence rather than independently, is that the sorting key for one axis is the adjusted position of its neighbor, not the neighbor's original value.
+Consider two adjacent numerical axes that both contain ties, where the observations tied on the first axis are also tied on the second.
+If each axis were spread in isolation, the second axis would sort its band against the unbroken ties of the first and find no information to order by.
+By processing the axes in sequence and reading each neighbor's already-spread coordinates, the method propagates the ordering established on one axis into the next: once the first axis has separated its tied observations, those separated positions become a usable key for the second.
+The test suite confirms this behavior directly: when two axes share a tie, the second axis orders its band by the first axis's adjusted positions, and the initial axis of the sweep is spread in input order rather than by its unprocessed neighbor.
+
+This sequential dependence is the same insight that underlies hierarchical sorting for categorical variables, where breaking ties on one axis creates the structure that the next axis sorts against, and it is what allows a chain of tied numerical axes to resolve into coherent bundles rather than a tangle.
+
+## Boundary Behavior, Degenerate Axes, and High Multiplicity {#sec-boundary}
+
+Three edge cases require explicit handling, and the method's treatment of each follows from the resolution-anchoring principle.
+
+When a tied value sits near the edge of the axis, its allocation is clamped to $[0, 1]$, which shrinks the realized height $S(v)$.
+Because the margins and the spacing are defined as fractions of $S(v)$ (Steps 3 and 4), the band contracts in proportion and no separate rule is needed.
+A tie exactly at $0$ or $1$ receives an allocation of height $\delta_j / 2$ lying entirely on the inner side of the value; its observations occupy the fraction $\sigma$ of that allocation, remain distinguishable, and stay within the unit interval.
+
+When an axis contains only a single distinct value, the resolution @eq-resolution is undefined: there is no neighboring value to set a budget against.
+The method declines to invent a scale, leaves the tied observations centered at their shared value, and issues a warning.
+This is the honest behavior: with no second value on the axis there is no information about how much room a spread may safely occupy, and the warning signals to the user that the axis carries no discriminating information rather than silently fabricating positions.
+
+A floating-point tolerance $\varepsilon$ governs the grouping in Step 2 so that values differing only by rounding are treated as a single tie.
+Values within $\varepsilon$ of one another are grouped and spread together, while genuinely distinct values remain separate, which prevents the resolution @eq-resolution from being driven to a meaningless near-zero value by numerical noise.
+
+When many observations share one value, @eq-spacing makes the behavior explicit.
+Because the dot-placement region $\sigma S(v)$ is fixed by the axis resolution and does not grow with the number of tied observations, the spacing $\Delta(v)$ is inversely proportional to $k - 1$.
+As tie multiplicity grows, $\Delta(v) \to 0$; for a fixed dot radius there is therefore a multiplicity $k^\star$ beyond which adjacent dots within a single band overlap, and the overplotting the spread was meant to resolve reappears inside the band.
+This limit is reached soonest exactly where ties are most common, small $\delta_j$ (finely or integer-valued axes) combined with large $k$, so it is a regime the method must confront rather than an unlikely corner.
+
+It is worth being precise about what does and does not fail here.
+The properties the construction is built to guarantee are unaffected: the allocation remains anchored to $\delta_j$, so the metric spacing of distinct values and the inter-band gaps are preserved regardless of $k$; the hierarchical ordering of Step 5 still holds, so no within-band crossings are introduced; and the tie region and its extent remain marked by the visual cue (@sec-annotation).
+What degrades is only the individual legibility of dots within a saturated band.
+The failure is graceful: the band still communicates that many observations share the value through a densely filled region, the same qualitative reading a hammock plot's area encoding provides, rather than a silent collapse of the axis geometry.
+Because $\Delta(v)$ is known in closed form, saturation is predictable rather than a surprise, and the implementation warns when $\Delta(v)$ falls below the `min_spacing` threshold (@sec-implementation).
+The count label of @sec-annotation carries the frequency that a saturated band cannot, so that saturation costs the reader dot legibility but not the count; the label is specified but not yet implemented. Its threshold, and whether saturated bands should also be drawn as filled regions, are to be informed by the sensitivity analysis of Chapter 4, which maps $\Delta(v)$ against the dot-contact threshold across the $(\sigma, \delta_j, k)$ grid.
+
+## Annotation and Visual Cue Design {#sec-annotation}
+
+When tied values on a numerical axis are spread within a resolution-based interval, each line is displaced from its true value to a within-band position, and that displacement is an artifact of tie-breaking rather than a reflection of meaningful variation in the data.
+A viewer who is unaware of this may misread the displacement as genuine within-group variance.
+The visual cue must therefore make the presence of a tie region legible without disrupting the tracing of individual lines through it, and it must answer a reading question: once a tied value's observations are distributed across a region of height up to $\delta_j$, what value does that region represent?
+
+The method answers by drawing a light gray box behind each band, anchored at the full allocation $[L(v), U(v)]$ and labeled with the original, unscaled value recovered from the raw data.
+This mirrors the categorical box convention of `geom_pcp_boxes()`, so that numerical and categorical bands are annotated consistently: a gray box in any axis region signals that the positions inside it are spread for legibility, not because the underlying values differ.
+This consistency reduces the cognitive overhead of interpreting mixed categorical and numerical plots.
+
+Three alternative cue designs were considered and set aside.
+A color change on tied lines would require an additional channel already commonly used for group membership.
+A texture fill would introduce ambiguity on screen at small box heights.
+A dashed axis segment at the tied value would mark the location but not the extent of the spread, making it difficult to recover the original value.
+The gray box avoids all three problems: it marks both the location, since the center of the box is the tied value, and the extent, since the box height is $\delta_j$, and it does not consume an encoding channel needed elsewhere.
+
+Unlike a categorical box, a numerical box does not encode frequency in its height: every box on an axis has the same height $\delta_j$, so the box reports where the tied value sits and how far its observations have been displaced, while the marginal frequency is read from how densely the box is filled.
+Frequency on a numeric axis therefore gets its own device: a count label giving $n(v)$ at the band, drawn alongside the value label and on by default for bands above a count threshold.
+The three elements together form the numeric cue: the box says where the tie is and how far the spread extends, the value label says what the tied value is, and the count label says how many observations share it.
+At saturation the count label is not a fallback but the primary reading.
+The box and the value label are implemented; the count label is specified in the November 2026 proposal and is not yet implemented.
+
+The value label reports what the value is on its original scale rather than on the $[0, 1]$ scale the plot computes in.
+The annotation layer, `pcp_tie_boxes()` together with `geom_pcp_tieboxes()`, consumes metadata that `pcp_spread_ties()` attaches to its output and is added before the polyline layer so that the boxes sit behind the lines.
+It is implemented as a standalone layer over precomputed rectangles rather than as a `ggproto` extension of the categorical box geom.
+The labels are recovered from the raw, pre-scaling data passed through the `original` argument:
+
+```{r}
+#| label: annotated-code
+#| eval: false
+boxes <- pcp_tie_boxes(iris_pcp, boxwidth = 0.25, original = iris_clean)
+
+ggplot(iris_pcp, aes_pcp()) +
+  geom_pcp_tieboxes(boxes, labels = FALSE) +   # boxes BEHIND the lines
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = species), alpha = 0.5, linewidth = 0.3) +
+  geom_pcp_labels() +
+  theme_pcp() +
+  scale_color_manual("Species", values = species_colors) +
+  theme(axis.text.x = element_text(angle = 30, vjust = 1, hjust = 1))
+```
+
+![Numerical ties annotated with light gray boxes. Each box is anchored at its value's full allocation $[L(v), U(v)]$ and therefore has height $\delta_j$ (half that where clamped at an end of the axis); the marginal frequency is carried by the density of lines inside the box, not by its height. Where consecutive values on an axis are all tied, as through the middle of `sepal_length` and along most of `petal_width`, their boxes abut and read as a single column. This is the visual merging that the inter-band gap diagnostic reports for these data at $\sigma = 0.9$.](figures/fig_annotated.png){#fig-annotated fig-scap="Numerical ties in the iris data annotated with gray boxes."}
+
+Setting `labels = TRUE` additionally prints each box's original value at its center, which is useful when the precise tied values matter; here the labels are suppressed to keep the dense `iris` display readable.
+Where many boxes are drawn, the `min_n` argument suppresses boxes for bands with fewer than `min_n` observations.
+
+## Application: Palmer Penguins {#sec-penguins}
+
+The `iris` measurements tie because they are recorded to a tenth of a centimeter; the Palmer penguins measurements tie because they are recorded to the nearest millimeter or gram.
+@fig-penguins-spread applies `pcp_spread_ties()` to the four measurement variables of a subset of 14 complete cases per species ($n = 42$), processed `from-left` with $\sigma = 0.9$:
+
+```{r}
+#| label: penguins-code
+#| eval: false
+library(palmerpenguins)
+axes <- c("bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g")
+
+peng <- penguins %>%
+  tidyr::drop_na(all_of(axes)) %>%
+  group_by(species) %>% slice_head(n = 14) %>% ungroup()
+
+peng_pcp <- peng %>%
+  pcp_select(all_of(axes)) %>%
+  pcp_scale("uniminmax") %>%
+  ungroup() %>%                 # before spreading: ungroup() drops attributes
+  pcp_spread_ties("from-left", sigma = 0.9)
+
+bands <- attr(peng_pcp, "pcp_ties")   # inner_min, inner_max: dot-placement regions
+```
+
+In this subset ties occur at multiplicities of two to four.
+Flipper length carries the most, with eleven tied values, the largest of them, 193 mm, shared by four birds.
+Because the measurements are recorded at a resolution that is fine relative to their range, the scaled resolutions are small ($\delta_j \approx 0.005$, $0.013$, $0.019$, and $0.009$ for bill length, bill depth, flipper length, and body mass) and the bands are correspondingly thin.
+This is the small-$\delta_j$ regime in which the inter-band gap $(1 - \sigma)\,\delta_j$ falls below the default `min_gap`, and the gap diagnostic fires on all four axes.
+The magnified window shows what the full view cannot: within each band the observations are ordered by their adjusted positions on the bill-depth axis, the left neighbor, so the polylines entering the band do not cross inside it, and the margins between adjacent bands remain visible.
+
+![The Palmer penguins data (14 complete cases per species, $n = 42$) after `pcp_spread_ties("from-left", sigma = 0.9)`. Left: gray rectangles mark the dot-placement region $[L(v) + S^{-}(v),\, U(v) - S^{+}(v)]$ of every tied value, read from the `pcp_ties` attribute; they have the same height $\sigma\delta_j$ for every tied value on an axis, whatever its multiplicity. Right: a magnified window on the flipper-length axis around the value with the largest multiplicity (193 mm, $k = 4$). Within each band the tied observations are ordered by their adjusted positions on the bill-depth axis, so the polylines entering the band do not cross inside it, and the gaps between adjacent bands remain visible.](figures/fig_penguins_spread.png){#fig-penguins-spread fig-scap="The Palmer penguins data after resolution-anchored spreading, with a magnified window."}
+
+@fig-penguins-labels adds the original tied value beside each band, the numerical analog of `geom_pcp_labels()`, using the labels that `pcp_tie_boxes()` recovers from the raw data.
+Labels are placed at the band center, which is the true value $v$, so the displacement inside the band can be read as artifact and the value recovered exactly.
+Labels are drawn for the largest bands first, and a label that would overlap one already drawn is omitted.
+
+![The layout of @fig-penguins-spread with each tie band labeled by its original value, placed at the band center. Labels for the largest bands are drawn first, and a label that would overlap one already drawn is omitted.](figures/fig_penguins_labels.png){#fig-penguins-labels fig-scap="The Palmer penguins data with tie bands labeled by their original values."}
+
+The script `make_method_figures.R`, in the `scripts/` folder of the dissertation source, contains the code for both figures, including the magnified window.
+
+## Comparison with Existing Treatments: Flea Beetles {#sec-flea}
+
+The penguins figures show the method working; they do not show how it compares with what a user would otherwise do.
+@fig-flea makes that comparison on the flea beetle data [@lubischew1962], 74 beetles of three species measured on six integer-valued variables, restricted to the four measurements in the regime the method is built for (@sec-regimes): `tars1`, `tars2`, `aede1`, and `aede3` take 46, 33, 34, and 33 distinct values, and on each of them between 48 and 62 of the 74 beetles share their value with at least one other beetle, in groups of up to seven.
+A user facing these axes has four options, and the figure draws all four.
+Leaving the values exact collapses each tie to a point.
+Jitter separates the lines, at random and without regard to the neighboring axis, so lines cross inside the jittered region and the displacement is unrelated to the data.
+Coercion, the treatment `pcp_arrange()` offers, turns each axis into 33 to 46 thin, equally spaced boxes and discards the metric scale: the two beetles at the largest gaps in the data, 19 units on `tars1` and 11 on `aede3`, sit one level-gap from their neighbors as every other beetle does.
+`pcp_spread_ties()` separates the tied lines, orders them by the neighboring axis, bounds the displacement by the resolution, marks the region, and keeps the axis metric, so the two beetles stand apart as they do under exact values and jitter.
+The figure shows what is drawn; whether viewers trace observations more reliably through spread ties than through exact or jittered ones is the question of the viewer study planned for Chapter 4.
+
+![The four treatments a user can apply to the flea beetle data (74 beetles, three species) on four integer-valued measurements with 33 to 46 distinct values each. Top left: exact values, where tied observations coincide. Top right: jitter at the `ggplot2` default, a uniform offset within 40% of the axis resolution, applied to every observation. Bottom left: each variable coerced to a factor and arranged with `pcp_arrange()`; every distinct value becomes a level, box height encodes frequency, and every gap is drawn the same, so each axis becomes a ladder of thin boxes. Bottom right: `pcp_spread_ties()` ($\sigma = 0.9$, `from-left`), with gray rectangles on the dot-placement regions of the tied values. The black lines are the beetles at the two largest gaps in the data, 19 units on `tars1` and 11 on `aede3`; the three numeric treatments show both as outlying, and coercion places each one level-gap from its neighbor. At this scale the three numeric treatments share one geometry; they differ inside the ties, in whether lines there are separated, ordered, bounded, and marked. The two few-valued measurements, `head` (13 values) and `aede2` (9), are omitted.](figures/fig_flea_treatments.png){#fig-flea width="100%" fig-scap="Four treatments of ties on the flea beetle data."}
+
+## Implementation Notes {#sec-implementation}
+
+The module depends only on base R internally, so it adds nothing to `ggpcp`'s existing dependencies, and it expects exactly the columns that the standard pipeline produces (`pcp_id`, `pcp_x`, `pcp_y`, `pcp_yend`, and `pcp_class`), failing with an informative message when an earlier pipeline step has been skipped.
+Numerical axes are detected automatically by their `pcp_class`, with factor axes left untouched, and a `vars` argument, which takes a `tidyselect` specification, allows the spread to be restricted to selected axes when only some numerical variables warrant tie-breaking, for instance the coarsely measured ones where ties are frequent.
+The band geometry of every tied value (value, multiplicity, allocation, interior region, and spacing) is attached to the result as the attribute `pcp_ties`, so that the annotation layer and any later diagnostic can read it without recomputation.
+
+Two diagnostics warn when the display is likely to be misread.
+The first fires when the inter-band gap $(1 - \sigma)\,\delta_j$ falls below `min_gap` (provisionally 0.005 of the axis), in which case adjacent bands may visually merge; on `iris` it fires on every numerical axis at $\sigma = 0.9$, because the measurements are fine-grained relative to their range.
+The second fires when the within-band spacing $\Delta(v)$ falls below `min_spacing` (provisionally 0.001), the saturation regime of high tie multiplicity in which individual observations overplot inside a band.
+Both warnings name the axes, and for saturation the values, that are affected.
+
+Two elements of the November 2026 specification are not yet in the code: the `resolution` override with its diagnostic (@sec-algorithm) and the count label (@sec-annotation).
+
+The default band-separation parameter $\sigma = 0.9$ is provisional, reserving a tenth of each band for the inter-band margins.
+@fig-sigma shows the parameter's visual effect directly: the occupied interior of each band scales linearly with $\sigma$, so smaller values draw tighter bands with wider gaps between them, trading away within-band resolution for cleaner Gestalt separation.
+
+```{r}
+#| label: sigma-code
+#| eval: false
+sigma_panels <- lapply(c(0.5, 0.7, 0.9), function(s) {
+  before %>%
+    pcp_spread_ties("from-right", sigma = s) %>%
+    panel(title = sprintf("sigma = %.1f", s))
+})
+
+patchwork::wrap_plots(sigma_panels, nrow = 1)
+```
+
+![The band-separation parameter $\sigma$ controls how much of each value's resolution budget is used for spreading. At $\sigma = 0.5$ the bands are tight and the inter-band gaps wide; at $\sigma = 0.9$ the bands fill nearly the full resolution, maximizing within-band detail at the cost of the margins. The occupied interior of each band scales linearly with $\sigma$.](figures/fig_sigma.png){#fig-sigma fig-scap="Effect of the band-separation parameter sigma on the iris data."}
+
+The next chapter examines this trade-off systematically: how the choice of $\sigma$ balances the legibility of individual observations against the visual separation of bands, and how much spread is too much.
+
+The behavior described above is not asserted but verified.
+A base-R test suite constructs `ggpcp`-style data by hand and checks each guarantee the method claims: that bands stay within $[v - \sigma\delta_j/2,\, v + \sigma\delta_j/2]$ away from the boundaries, that spacing equals $\sigma S(v)/(k-1)$ and is uniform, that within-band order matches the reference axis, that untied and factor values are left unchanged, that sequential processing propagates adjusted positions across tied axes, that the initial axis of each sweep is spread in input order, that boundary, tolerance, and single-value cases behave as specified, that both diagnostics fire when they should and only then, and that the annotation boxes recover the correct original values.
+All 36 checks pass against the current implementation (@sec-appendix-tests), which gives the method a concrete operational definition: it is the algorithm that satisfies these properties, and the properties are what the following chapter evaluates against alternatives.
