@@ -2,7 +2,7 @@
 # Tests for pcp_spread_ties() against the July 2026 paper revision.
 # Base R only; builds ggpcp-style long data by hand.
 # =============================================================================
-source("/home/claude/work/pcp_spread_ties.R")
+source("comprehensive_exam/numerical_tie_attempts/pcp_spread_ties.R")
 
 fails <- 0
 check <- function(label, cond) {
@@ -21,6 +21,7 @@ make_long <- function(W, classes = rep("numeric", ncol(W))) {
     stringsAsFactors = FALSE
   )
 }
+
 getY <- function(d, ax) {
   r <- as.character(d$pcp_x) == ax
   d$pcp_y[r][order(d$pcp_id[r])]
@@ -78,10 +79,12 @@ check("pcp_ties records Delta(v) spacing",
 res_l <- pcp_spread_ties(long, method = "from-left", sigma = 0.9)
 Badj_l <- getY(res_l, "B")
 ok <- TRUE
+
 for (v in c(0.8, 0.5, 0.2)) {
   idx <- which(B == v)
   ok <- ok && all(order(Badj_l[idx]) == order(A[idx]))
 }
+
 check("from-left: within-band rank matches reference axis A", ok)
 
 # -----------------------------------------------------------------------------
@@ -97,6 +100,7 @@ long2 <- make_long(cbind(A = A2, B = B2, C = C2))
 res2 <- pcp_spread_ties(long2, method = "from-right", sigma = 0.9)
 B2a <- getY(res2, "B"); C2a <- getY(res2, "C")
 idx <- 1:4
+
 check("initial axis (C): band spread in INPUT order, not by neighbor A",
       all(order(C2a[idx]) == 1:4) && !all(order(C2a[idx]) == order(A2[idx])))
 check("sequential keys: B band ordered by ADJUSTED C positions",
@@ -104,7 +108,9 @@ check("sequential keys: B band ordered by ADJUSTED C positions",
 
 # Same data under from-left: A is initial (no ties there), C now references B.
 res2l <- pcp_spread_ties(long2, method = "from-left", sigma = 0.9)
+
 B2l <- getY(res2l, "B"); C2l <- getY(res2l, "C")
+
 check("from-left: B references A; C references adjusted B",
       all(order(B2l[idx]) == order(A2[idx])) &&
       all(order(C2l[idx]) == order(B2l[idx])))
@@ -115,9 +121,11 @@ check("from-left: B references A; C references adjusted B",
 Wm <- cbind(num1 = c(0.5, 0.5, 0.5, 1, 0), fac = c(.2, .4, .6, .8, 1),
             num2 = c(0.25, 0.25, 0.75, 0.75, 0.1))
 lm_ <- make_long(Wm, classes = c("numeric", "factor", "numeric"))
+
 res3 <- pcp_spread_ties(lm_, method = "from-right")
 check("factor axis values untouched",
       isTRUE(all.equal(getY(res3, "fac"), unname(Wm[, "fac"]))))
+
 res4 <- pcp_spread_ties(lm_, method = "from-right", vars = "num1")
 check("vars=: only requested axis spread",
       !isTRUE(all.equal(getY(res4, "num1"), unname(Wm[, "num1"]))) &&
@@ -132,6 +140,8 @@ Wb <- cbind(A = c(.1, .9, .5), B = c(0, 0, 0.5))   # distinct B: 0, 0.5 -> delta
 resb <- pcp_spread_ties(make_long(Wb), method = "from-right", sigma = 0.9)
 Bb <- getY(resb, "B")
 S_clamped <- 0.25
+
+
 m <- (1 - 0.9) * S_clamped / 2
 check("clamped band: realized allocation S(v) = U - L < delta_j",
       isTRUE(all.equal(range(Bb[1:2]), c(0 + m, S_clamped - m))))

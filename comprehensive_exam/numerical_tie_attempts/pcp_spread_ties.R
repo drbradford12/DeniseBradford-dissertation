@@ -3,7 +3,7 @@
 #' ============================================================================
 #'
 #' Implements the tie_spread algorithm from:
-#'   Bradford (2026-07-01), "A Grammar of Graphics Approach to Managing
+#'   "A Grammar of Graphics Approach to Managing
 #'   Numerical Ties in Parallel Coordinate Plots" (Sections 4.3, 4.6, 4.8).
 #'
 #' The algorithm (Section 4.8, Algorithm Summary):
@@ -40,8 +40,10 @@
 #'
 #' Pipeline usage:
 #'
-#'   data |> pcp_select(...) |> pcp_scale("uniminmax") |>
-#'     pcp_arrange("from-right") |>      # categorical ties (existing ggpcp)
+#'   data %>%
+#'     pcp_select(...) %>%
+#'     pcp_scale("uniminmax") %>%
+#'     pcp_arrange("from-right") %>%      # categorical ties (existing ggpcp)
 #'     pcp_spread_ties("from-right")     # numerical ties   (this file)
 #'
 #' or via pcp_arrange_unified(), which performs both. `tie_spread` is
@@ -478,6 +480,7 @@ geom_pcp_tieboxes <- function(boxes, fill = "grey85", colour = NA,
       fill = fill, colour = colour, alpha = alpha, inherit.aes = FALSE
     )
   )
+
   if (labels && nrow(boxes) > 0L) {
     layers <- c(layers, list(
       ggplot2::geom_label(
@@ -492,5 +495,6 @@ geom_pcp_tieboxes <- function(boxes, fill = "grey85", colour = NA,
       )
     ))
   }
+
   layers
 }
