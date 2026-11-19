@@ -3,7 +3,7 @@
 This document collects the parts of the dissertation that are currently drafted, assembled from the project repository for review by the advisers and formatted with the University of Nebraska–Lincoln dissertation class (`nuthesis`).
 It is a working draft dated November 2026, not a submission copy.
 
-The planned structure follows the November 2026 revision of the research proposal, in its version of November 9.
+The planned structure follows the November 2026 revision of the research proposal, in its version of November 19 (`comp_exam_v2`).
 Three of its five chapters are included here.
 
 | Chapter | Content | Status |
@@ -19,9 +19,9 @@ Three of its five chapters are included here.
 Chapter 1 is adapted from the introduction of the November 2026 proposal.
 Chapter 2 reviews the literature that constrains a method for spreading ties on numerical axes, organized around overplotting and density, categorical extensions of parallel axes, perceptual bounds on displacement, axis and category ordering, and computational quality metrics, and it closes with the research questions and contributions.
 Chapter 3 specifies the resolution-anchored algorithm and shows its implementation as `pcp_spread_ties()`, a fourth data-preparation step in the `ggpcp` pipeline.
-It combines the earlier method chapter with the formal material of the proposal's Section 4: the regimes in which the method applies, the notation, two propositions stating what the construction guarantees, the unified framework, the high-multiplicity limit, the visual-cue design, a worked example, an application to the Palmer penguins, and a comparison of four treatments on the flea beetle data.
-Two specified elements, the `resolution` override and the count label, are marked as not yet implemented, and missing values are outside the scope of the dissertation.
-The specification, code excerpt, and figures of Chapter 3 correspond to the current implementation, which is reproduced in @sec-appendix-code, and its data figures were regenerated from that code for this draft.
+It combines the earlier method chapter with the formal material of the proposal's Section 4: the regimes in which the method applies, the notation, two propositions stating what the construction guarantees, the unified framework, the high-multiplicity limit, the visual-cue design including the perceptual case against the box, a worked example, an application to the Palmer penguins, and two comparisons on the flea beetle data: four treatments of one axis type, and two regimes in one plot.
+The first phase of the implementation is complete, including the count label; the `resolution` override and its diagnostic are the next phase, and missing values are outside the scope of the dissertation.
+The specification, code excerpts, and figures of Chapter 3 correspond to the current implementation of November 19, which is reproduced in @sec-appendix-code, and its data figures were regenerated from that code for this draft; the package vignette, *Breaking ties on numeric axes*, shows the same functions on `iris`, the flea beetle data, and the penguins.
 
 @sec-appendix-repo is a guide to the repository: how the additions to `ggpcp` fit the package pipeline and feed the analysis, what each file contains and whether it is current, a proposed structure for sharing, and the results of running the test suite.
 

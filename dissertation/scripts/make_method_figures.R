@@ -45,19 +45,80 @@ p1 <- panel(before, "(a) Without numerical tie-breaking") +
   panel(after, "(b) With tie-breaking (sigma = 0.9)")
 ggsave(file.path(out, "fig_before_after.png"), p1, width = 10, height = 5, dpi = 200)
 
-sigma_panels <- lapply(c(0.5, 0.7, 0.9), function(s) {
-  before %>%
-    pcp_spread_ties("from-right", sigma = s) %>%
-    panel(title = sprintf("sigma = %.1f", s))
+win_axes <- c("sepal_width", "petal_length", "petal_width")
+win_y <- c((1.0 - 0.1) / 2.4, (1.5 - 0.1) / 2.4)   # petal widths 1.0 to 1.5 cm, scaled
+win_pad <- 0.03
+spread_win <- function(d, sigma) {
+  suppressWarnings(pcp_spread_ties(d, "from-right", sigma = sigma))
+}
+win_panel <- function(d, title, extent = "inner", boxes_only = TRUE, labels = FALSE, min_n = 2) {
+  dd <- d %>% filter(pcp_x %in% win_axes) %>% mutate(pcp_x = factor(pcp_x, levels = win_axes))
+  bx <- pcp_tie_boxes(d, boxwidth = 0.3, min_n = min_n, extent = extent, original = iris_clean) %>%
+    filter(pcp_x %in% win_axes) %>%
+    mutate(axis_index = match(pcp_x, win_axes),
+           xmin = axis_index - 0.15, xmax = axis_index + 0.15)
+  g <- ggplot(dd, aes_pcp()) +
+    { if (boxes_only) geom_pcp_tieboxes(bx) } +
+    geom_pcp_axes() +
+    geom_pcp(aes(colour = species), alpha = 0.5, linewidth = 0.3) +
+    { if (labels) geom_pcp_tieboxes(bx, box = FALSE, labels = TRUE, label_size = 2.2,
+                                    count_nudge = 0.17) } +
+    scale_color_manual(values = species_colors, guide = "none") +
+    coord_cartesian(xlim = c(0.75, 3.6), ylim = win_y + c(-win_pad, win_pad), expand = FALSE) +
+    labs(title = title, x = NULL, y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(panel.grid = element_blank(), axis.text.y = element_blank(),
+          axis.ticks.y = element_blank(), plot.title = element_text(size = 10))
+  g
+}
+full_panel <- function(d, extent = "inner") {
+  dd <- d %>% filter(pcp_x %in% win_axes) %>% mutate(pcp_x = factor(pcp_x, levels = win_axes))
+  bx <- pcp_tie_boxes(d, boxwidth = 0.3, extent = extent) %>%
+    filter(pcp_x %in% win_axes) %>%
+    mutate(axis_index = match(pcp_x, win_axes),
+           xmin = axis_index - 0.15, xmax = axis_index + 0.15)
+  ggplot(dd, aes_pcp()) +
+    annotate("rect", xmin = 0.5, xmax = 3.5, ymin = win_y[1], ymax = win_y[2],
+             fill = "#FFF3B0", alpha = 0.6) +
+    geom_pcp_tieboxes(bx) +
+    geom_pcp_axes() +
+    geom_pcp(aes(colour = species), alpha = 0.5, linewidth = 0.3) +
+    scale_color_manual(values = species_colors, guide = "none") +
+    labs(x = NULL, y = NULL) +
+    theme_bw(base_size = 10) +
+    theme(panel.grid = element_blank(), axis.text.y = element_blank(),
+          axis.ticks.y = element_blank())
+}
+sigma_panels <- lapply(c(0.5, 0.7, 0.9), function(sg) {
+  win_panel(spread_win(before, sg), sprintf("sigma = %.1f", sg))
 })
 p2 <- patchwork::wrap_plots(sigma_panels, nrow = 1)
-ggsave(file.path(out, "fig_sigma.png"), p2, width = 11, height = 4.2, dpi = 200)
+ggsave(file.path(out, "fig_sigma.png"), p2, width = 10, height = 4, dpi = 200)
 
-boxes <- pcp_tie_boxes(iris_pcp, boxwidth = 0.25, original = iris_clean)
+# box extent (proposal Fig. 15) and the two cues (proposal Fig. 16)
+after9 <- spread_win(before, 0.9)
+p_ext <- (win_panel(after9, "Box drawn to the allocation", extent = "band") +
+            full_panel(after9, "band") + plot_layout(widths = c(1.6, 1))) /
+         (win_panel(after9, "Box drawn to the dot-placement region", extent = "inner") +
+            full_panel(after9, "inner") + plot_layout(widths = c(1.6, 1)))
+ggsave(file.path(out, "fig_box_extent.png"), p_ext, width = 9, height = 7.5, dpi = 200)
+
+p_cue <- (win_panel(after9, "Box with value and count labels", labels = TRUE, min_n = 5) +
+            full_panel(after9) + plot_layout(widths = c(1.6, 1))) /
+         (win_panel(after9, "Value and count labels alone", boxes_only = FALSE, labels = TRUE, min_n = 5) +
+            full_panel(after9) + plot_layout(widths = c(1.6, 1)))
+ggsave(file.path(out, "fig_two_cues.png"), p_cue, width = 9, height = 7.5, dpi = 200)
+pw_delta <- min(diff(sort(unique((iris$Petal.Width - 0.1) / 2.4))))
+cat("petal_width delta_j:", round(pw_delta, 3), " gaps at sigma .5/.7/.9:",
+    round((1 - c(0.5, 0.7, 0.9)) * pw_delta, 3), "\n")
+
+boxes <- pcp_tie_boxes(iris_pcp, boxwidth = 0.25, min_n = 5, original = iris_clean)
 p3 <- ggplot(iris_pcp, aes_pcp()) +
-  geom_pcp_tieboxes(boxes, labels = FALSE) +
+  geom_pcp_tieboxes(boxes) +                                 # boxes BEHIND the lines
   geom_pcp_axes() +
   geom_pcp(aes(colour = species), alpha = 0.5, linewidth = 0.3) +
+  geom_pcp_tieboxes(boxes, box = FALSE, labels = TRUE,
+                    label_size = 2.2, count_nudge = 0.14) +  # labels in front
   geom_pcp_labels() +
   theme_pcp() +
   scale_color_manual("Species", values = species_colors) +
@@ -149,7 +210,7 @@ ggsave(file.path(out, "fig_penguins_spread.png"),
 lab <- pcp_tie_boxes(peng_pcp, original = peng) %>% arrange(desc(n))
 p_lab <- p_full +
   geom_text(data = lab, aes(x = axis_index + half_w + 0.03, y = (ymin + ymax) / 2,
-                            label = label),
+                            label = ifelse(n >= 3, paste0(label, " (n = ", n, ")"), label)),
             inherit.aes = FALSE, hjust = 0, size = 2.4, colour = "grey25",
             check_overlap = TRUE)
 ggsave(file.path(out, "fig_penguins_labels.png"), p_lab, width = 9, height = 5, dpi = 200)
@@ -233,3 +294,28 @@ cat("max multiplicity:", paste(fvars, sapply(flea[fvars], function(y) max(table(
 cat("largest gaps:", paste(names(gaps), gaps), "| highlighted ids:", hi_ids, "\n")
 cat("head distinct:", length(unique(flea$head)), " aede2 distinct:", length(unique(flea$aede2)), "\n")
 cat("flea warnings:\n"); cat(flea_warnings, sep = "\n")
+
+
+# ---------------------------------------------------------------------------
+# Flea beetles, two regimes in one plot (November 2026 proposal, Fig. 23):
+# aede2 (nine values) as a factor, the other five numeric, one unified call.
+# ---------------------------------------------------------------------------
+flea_two <- suppressWarnings(
+  flea %>% mutate(aede2 = factor(aede2)) %>%
+    pcp_select(species, 2:7, species) %>%
+    pcp_scale("uniminmax") %>%
+    pcp_arrange_unified("from-right", min_gap = 0))
+flea_two_boxes <- pcp_tie_boxes(flea_two, boxwidth = 0.15, min_n = 4, original = flea)
+p_two <- ggplot(flea_two, aes_pcp()) +
+  geom_pcp_tieboxes(flea_two_boxes) +
+  geom_pcp_axes() +
+  geom_pcp(aes(colour = species), alpha = 0.7, linewidth = 0.35) +
+  geom_pcp_tieboxes(flea_two_boxes, box = FALSE, labels = TRUE, label_size = 2.0,
+                    count_nudge = 0.1) +
+  geom_pcp_boxes(boxwidth = 0.15) +
+  geom_pcp_labels() +
+  scale_colour_manual(values = flea_cols, name = NULL) +
+  theme_pcp() +
+  theme(legend.position = "bottom")
+ggsave(file.path(out, "fig_flea_regimes.png"), p_two, width = 10, height = 6.5, dpi = 200)
+cat("two-regime boxes drawn:", nrow(flea_two_boxes), "\n")

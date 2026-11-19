@@ -15,128 +15,159 @@ format:
     toc: false
     include-in-header:
       text: |
-        \usepackage{xcolor} 
+        \usepackage{xcolor}
 ---
 
 ## Purpose
 
-This memo accompanies the November 2026 revision of the preliminary examination document and is submitted to resolve the incomplete recorded for the exam. 
-The revision has the shape of a story in three stages. 
-In March, the committee read a method that disagreed with itself about the one thing it had to decide, how tall a tie band should be. 
-Over the summer and fall, multiple rounds of criticism, the committee's and reviewers', forced the method to say exactly what it claims, where it applies, and what it inherits from the published categorical method. 
-The November draft is the third stage: one specification, two properties, a baseline that a user would actually choose, and a study that puts the claim in front of viewers. 
-The criticism made the document; this memo records what it changed. 
+This memo accompanies the November 2026 revision of the preliminary examination document and is submitted to resolve the incomplete recorded for the exam.
+The revision has the shape of a story in three stages.
+In March, the committee read a method that disagreed with itself about the one thing it had to decide, how tall a tie band should be.
+Over the summer and fall, multiple rounds of criticism, the committee's and reviewers', forced the method to say exactly what it claims, where it applies, and what it inherits from the published categorical method.
+The November draft is the third stage: one specification, two properties, a baseline that a user would actually choose, and a study that puts the claim in front of viewers.
+The criticism made the document; this memo records what it changed.
 Section numbers refer to the November document.
 
 ## Summary of changes since March 2026
 
-The whole method hinges on one image. 
-On a numeric axis, a tie is a fork in the road with no signpost: lines arrive at a point and leave it, and a reader following one of them cannot say which way it went. 
-`tie_spread` adds the signpost without moving the road. 
-The algorithmic changes have one source. 
-March allocated vertical space to a tied value by its frequency in one section and by the axis resolution in another. 
-November chooses the resolution and carries that choice through the algorithm (@fig-memo-toy). 
+The whole method hinges on one image.
+On a numeric axis, a tie is a fork in the road with no signpost: lines arrive at a point and leave it, and a reader following one of them cannot say which way it went.
+`tie_spread` adds the signpost without moving the road.
+The algorithmic changes have one source.
+March allocated vertical space to a tied value by its frequency in one section and by the axis resolution in another.
+November chooses the resolution and carries that choice through the algorithm (@fig-memo-toy).
 The remaining changes answer two rounds of feedback on the circulated draft: what the dissertation can show, and how the extension stands in relation to the published categorical method.
+A scan of the literature in November, of work since 2023 and of earlier prior art, adds a third group: how the extension stands in relation to earlier work on parallel axes.
 
 ![The November construction on 18 observations (document Figure 10). Left: exact values, with ties on Year B collapsing to three points. Right: tied observations spread within bands anchored to the axis resolution and ordered by their Year A positions, with a visible gap between the bands at 2000 and 2001.](images/memo_toy_before_after.png){#fig-memo-toy fig-pos="H"}
 
 ### Algorithm
 
-- **Band allocation (Sections 4.2, 4.6.3.3).** 
-Every tied value receives a band of height $S(v) = \delta_j$, the axis resolution, whatever its multiplicity. 
+- **Band allocation (Sections 4.2, 4.6.3.3).**
+Every tied value receives a band of height $S(v) = \delta_j$, the axis resolution, whatever its multiplicity.
 A numeric axis encodes magnitude; a band that grew with frequency would spend that encoding on something else.
-- **Separation parameter (Equations 6–8, 10).** 
-$\sigma \in (0, 1]$, the `sigma` argument, sets the margins $S^{\pm}(v) = (1-\sigma)\,S(v)/2$, the spacing $\Delta(v) = \sigma S(v)/(k-1)$, and the positions. 
+- **Separation parameter (Equations 6–8, 10).**
+$\sigma \in (0, 1]$, the `sigma` argument, sets the margins $S^{\pm}(v) = (1-\sigma)\,S(v)/2$, the spacing $\Delta(v) = \sigma S(v)/(k-1)$, and the positions.
 The margins are a fraction of the realized allocation, so the clamped boundary case needs no separate formula. March's $\beta$, minimum spacing, and $\varepsilon$ are removed.
-- **Resolution (Section 4.6.3.1).** 
-\textcolor{blue}{New.} 
-$\delta_j$ is the grid on which a variable is recorded. 
-Its default is the smallest gap between adjacent distinct values, and a `resolution` argument overrides it in data units. 
-For a variable stored as a double the default is what `ggplot2::resolution()` computes; for an integer column that function returns 1 whatever the gaps, and the smallest gap is used. 
-The minimum gap is not robust; a diagnostic reports when it is far below the typical gap and recommends an override. 
+- **Resolution (Section 4.6.3.1).**
+\textcolor{blue}{New.}
+$\delta_j$ is the grid on which a variable is recorded.
+Its default is the smallest gap between adjacent distinct values, and a `resolution` argument overrides it in data units.
+For a variable stored as a double the default is what `ggplot2::resolution()` computes; for an integer column that function returns 1 whatever the gaps, and the smallest gap is used.
+The minimum gap is not robust; a diagnostic reports when it is far below the typical gap and recommends an override.
 The default is in the package; the argument and the diagnostic are not yet.
-- **Sorting (Sections 4.3, 4.6.3.5).** 
-Inherited from `pcp_arrange` unchanged. 
-Within one band, ordering by position on the reference neighbor yields zero within-band crossings; that result is exact. 
-Across axes, the one-pass sweep is a greedy heuristic for an NP-hard problem, and the draft says so. 
+- **Sorting (Sections 4.3, 4.6.3.5).**
+Inherited from `pcp_arrange` unchanged.
+Within one band, ordering by position on the reference neighbor yields zero within-band crossings; that result is exact.
+Across axes, the one-pass sweep is a greedy heuristic for an NP-hard problem, and the draft says so.
 The `from-both` seam (`center`, `center_reference`) and the initial axis of every sweep are specified.
-- **High-multiplicity limit (Section 4.6.3.4).** 
-\textcolor{blue}{New.} 
-The band does not grow with $k$, so at some $k^\star$ adjacent dots overlap. 
+- **High-multiplicity limit (Section 4.6.3.4).**
+\textcolor{blue}{New.}
+The band does not grow with $k$, so at some $k^\star$ adjacent dots overlap.
 Metric spacing, inter-band gaps, and zero within-band crossings all hold; only dot legibility degrades, the package warns when the spacing inside a band falls below `min_spacing`, and the count label carries the frequency.
-- **Properties (Section 4.6.3.7).** 
-\textcolor{blue}{New.} 
-Property 1, metric preservation: order is preserved, no observation moves more than $\delta_j/2$, bands away from the axis ends are centered on their values, and adjacent bands are separated by at least $(1-\sigma)\,\delta_j$, or three quarters of that next to a band clamped at an axis end. 
-Property 2, no within-band crossings. 
+- **Properties (Section 4.6.3.7).**
+\textcolor{blue}{New.}
+Property 1, metric preservation: order is preserved, no observation moves more than $\delta_j/2$, bands away from the axis ends are centered on their values, and adjacent bands are separated by at least $(1-\sigma)\,\delta_j$, or three quarters of that next to a band clamped at an axis end.
+Property 2, no within-band crossings.
 Both rest on one hypothesis, that distinct values are at least $\delta_j$ apart, which the default satisfies and the diagnostic enforces.
-- **Unified framework (Table 2; Figures 11–12).** 
+A remark after Property 1 gives its limiting form: as $\sigma$ or $\delta_j$ goes to zero, the spread plot converges to the exact-value plot, the analogue of the convergence criterion that Mason et al. (2026) set for plots of uncertain data.
+The placement is not continuous at the moment a tie forms, and the remark says so.
+- **Unified framework (Table 2; Figures 11–12).**
 All five quantities, $S$, $S^{+}$, $S^{-}$, $n$, and spacing, are mapped between the categorical and numeric cases, and the two parameter keys share one layout (@fig-memo-worked).
 
 ![The worked example (document Figure 13). Three tied groups on Variable B, $n(v) = 5, 3, 2$, receive bands of identical height $S(v) = \delta_j = 0.25$ at their true values; $\Delta(v)$ shrinks as $n(v)$ grows. Within each band, observations are ordered by their Variable C positions, so no lines cross inside the band.](images/memo_worked_example.png){#fig-memo-worked width="58%" fig-pos="H"}
 
 ### Relationship to the published method
 
-- **Point of divergence (Section 4.1).** 
-The categorical method solves legibility and density with one device because a nominal axis has height to spare. 
-On a numeric axis height already encodes magnitude, so the problems decouple: `tie_spread` inherits the spreading and the sorting and cannot inherit frequency-as-height. 
+- **Point of divergence (Section 4.1).**
+The categorical method solves legibility and density with one device because a nominal axis has height to spare.
+On a numeric axis height already encodes magnitude, so the problems decouple: `tie_spread` inherits the spreading and the sorting and cannot inherit frequency-as-height.
 The section cites the JCGS paper's own scoping of `pcp_arrange` to the case where "categorical variables are present."
-- **Three regimes.** 
-Few integer levels: coercion to a factor is the right treatment, unchanged. 
-Many distinct values with scattered ties: coercion turns the axis into thin, equally spaced level boxes and discards the metric scale, and `tie_spread` applies. 
+It now states the difference in the terms Mason et al. (2026) take from the grammar of graphics: overlap is adjusted in spare space and not on the measured scale, a nominal axis is spare space, and the only spare space on a numeric axis lies inside its resolution.
+- **Three regimes.**
+Few integer levels: coercion to a factor is the right treatment, unchanged.
+Many distinct values with scattered ties: coercion turns the axis into thin, equally spaced level boxes and discards the metric scale, and `tie_spread` applies.
 Near-continuous: nothing to spread, and the software says so. The per-axis interface, the `vars` argument, applies the regimes within one plot.
-- **Density has its own device (Section 4.5).** 
-A categorical box is a histogram bar; a numeric band is not, since its height is fixed. 
+- **Density has its own device (Section 4.5).**
+A categorical box is a histogram bar; a numeric band is not, since its height is fixed.
 A count label giving $n(v)$ joins the box and the value label as a first-class element of the cue, on by default above a count threshold.
-- **The box is contested (Section 4.5).** 
-\textcolor{blue}{New.} 
-The gray box stays the provisional default, and the section now states the perceptual case against it: enclosure groups tied values into bins on a metric axis; a box of constant height invites a frequency reading it cannot support; boxes add clutter where the lines converge; and their edges may slow tracing. 
-A box now covers only the region its observations occupy, so boxes at adjacent tied values no longer merge into a column (document Figure 15), and the box is drawn beside the labels alone in Figure 16. 
+- **The box is contested (Section 4.5).**
+\textcolor{blue}{New.}
+The gray box stays the provisional default, and the section now states the perceptual case against it: enclosure groups tied values into bins on a metric axis; a box of constant height invites a frequency reading it cannot support; boxes add clutter where the lines converge; and their edges may slow tracing.
+A box now covers only the region its observations occupy, so boxes at adjacent tied values no longer merge into a column (document Figure 15), and the box is drawn beside the labels alone in Figure 16.
 The box against the labels alone is part of RQ2 and a factor in the future perceptual study (Section 3.3.2), with a same-value task added to test what the box is for.
-- **Corrections.** 
-March said that `space` and `method` already spread numeric values and that `ggpcp` handles ties "in continuous variables." 
-Neither is so, and both are corrected. 
-The claim that viewers trace lines preattentively is withdrawn; tracing is serial, and the slope perturbation at a tied axis, bounded by $\sigma\delta_j/2$, is acknowledged. 
+- **Corrections.**
+March said that `space` and `method` already spread numeric values and that `ggpcp` handles ties "in continuous variables."
+Neither is so, and both are corrected.
+The claim that viewers trace lines preattentively is withdrawn; tracing is serial, and the slope perturbation at a tied axis, bounded by $\sigma\delta_j/2$, is acknowledged.
 Missing values are placed outside scope.
+Two inconsistencies within the November draft are also removed.
+The introduction listed marginal density on the vertical axis among the method's properties, and Section 3.3 described the viewer study as a comparison against factor coercion; both now agree with Sections 4 and 3.3.1.
+
+### Relationship to earlier work on parallel axes
+
+- **Prior art (Sections 1, 1.1.1, 4.4, 4.5).**
+\textcolor{blue}{New.}
+Graham and Kennedy (2003) named the crossover ambiguity that arises when polylines share a point on an axis, and spread such a point into a short line inside a bounding box, placing each line by its average position on the two neighboring axes.
+Their spread was built for axes with few discrete values and empty space between them; where the space ran out, the axis was distorted to make room.
+The draft credits two elements of the design to that work, placement informed by the neighboring axes and the box, and restates what is new: an allocation anchored to the resolution on an axis that has no empty space and is never rescaled, rank-matching with Properties 1 and 2, and the count label.
+Their curves change the geometry of the lines and not the positions on the axis, and Section 4.4 places them outside the scope of a dissertation that extends the positional tie-breaking of `ggpcp`.
+- **Positional adjustment (Section 1.1.1).**
+\textcolor{blue}{New.}
+Gatherplots (Park, Kim, and Elmqvist, 2023) join jitter and beeswarm layouts as a third positional method, with a crowdsourced comparison against jitter.
+- **Ordering (Sections 1.1.4, 4.3).**
+\textcolor{blue}{New.}
+Rich, Oakes, and Pachter (2025) optimize the order of strata in alluvial plots and leave the order inside a stratum alone, which is the order `tie_spread` sets.
+Wallinger et al. (2025) order curves inside a bin with an exact algorithm, and are cited as a contrast to the one-pass sweep.
+- **What the band is not (Sections 4.3, 4.5).**
+\textcolor{blue}{New.}
+Two concessions are added.
+Sorting by the neighboring axis makes the lines inside a band appear rank-ordered with that neighbor; the pattern is the method's doing, and it is confined to the band.
+The allocation at a value $v$, of height $\delta_j$ and centered on $v$, coincides with the interval of values that round to $v$, and a reader may take the band for measurement uncertainty.
+The draft states that the data are treated as exact, that positions inside a band are assigned and not sampled, and that the cue marks the band as artifact.
 
 ### Evaluation
 
-- **Research questions (Section 3.1).** 
-RQ1, representation; RQ2, defaults; RQ3, comparative value against what a user does with a many-valued axis today, exact values or jitter, and at the regime boundary against factor coercion. 
+- **Research questions (Section 3.1).**
+RQ1, representation; RQ2, defaults; RQ3, comparative value against what a user does with a many-valued axis today, exact values or jitter, and at the regime boundary against factor coercion.
 Five contributions are named, among them the regime boundary, the count label, a computational benchmarking framework, and the viewer study.
-- **Computational benchmarking (Section 3.3).** 
-The ParSetgnostics metrics of Dennig et al. are adapted to individual-line displays and applied to five conditions (hammock, exact values, jitter, coercion, `tie_spread`), with a metric-fidelity measure added; within-band crossings are verified at zero in every cell; a sensitivity analysis over $(\sigma, \delta_j, k)$ locates the stable region and the degradation boundary. 
+- **Computational benchmarking (Section 3.3).**
+The ParSetgnostics metrics of Dennig et al. are adapted to individual-line displays and applied to five conditions (hammock, exact values, jitter, coercion, `tie_spread`), with a metric-fidelity measure added; within-band crossings are verified at zero in every cell; a sensitivity analysis over $(\sigma, \delta_j, k)$ locates the stable region and the degradation boundary.
 March's twelve-week plan, with a 128-subject study and an IEEE VIS submission, is replaced.
-- **Viewer study (Section 3.3.1).** 
-\textcolor{blue}{New.} 
-The main block compares `tie_spread` with the two things a user does with a many-valued axis today: leaving the values exact, and jitter at `ggplot2`'s default (@fig-memo-flea). 
-Coercion is not a condition there, since no user would coerce an axis with 46 values; it is tested in a boundary block on `head`, with 13 values, where the choice between coercing and spreading is live. 
-Tasks are tracing and frequency comparison in the main block, with gap detection added at the boundary. V1: on tracing, `tie_spread` > jitter > exact, because jitter orders tied lines at random. 
-V2: on frequency, the same order, attributable to the count label. 
-V3: at the boundary, `tie_spread` matches coercion on tracing and gap detection, and coercion is at least as accurate on frequency against a band without its label; that is the cost estimate. 
-Stimuli come from the four many-valued flea beetle measurements rather than the asthma data March used against hammock plots: hospitalizations and comorbidities take seven and eight values over 696 patients, the few-levels regime at saturating multiplicity, so the asthma data serve the future hammock comparison and the saturation case in the sensitivity analysis. 
-A design pilot of the tracing task with volunteer colleagues precedes the SDSS submission. 
-The main study follows institutional review and OSF pre-registration, with a planning figure of about 100 participants. 
+- **Viewer study (Section 3.3.1).**
+\textcolor{blue}{New.}
+The main block compares `tie_spread` with the two things a user does with a many-valued axis today: leaving the values exact, and jitter at `ggplot2`'s default (@fig-memo-flea).
+Coercion is not a condition there, since no user would coerce an axis with 46 values; it is tested in a boundary block on `head`, with 13 values, where the choice between coercing and spreading is live.
+Tasks are tracing and frequency comparison in the main block, with gap detection added at the boundary. V1: on tracing, `tie_spread` > jitter > exact, because jitter orders tied lines at random.
+V2: on frequency, the same order, attributable to the count label.
+V3: at the boundary, `tie_spread` matches coercion on tracing and gap detection, and coercion is at least as accurate on frequency against a band without its label; that is the cost estimate.
+Stimuli come from the four many-valued flea beetle measurements rather than the asthma data March used against hammock plots: hospitalizations and comorbidities take seven and eight values over 696 patients, the few-levels regime at saturating multiplicity, so the asthma data serve the future hammock comparison and the saturation case in the sensitivity analysis.
+Two controls are added.
+Axis aspect ratio is fixed across conditions, since accuracy on parallel coordinate tasks, tracing among them, depends on it (Garner, Burton, and Fernstad, 2024; Meka, Kronsteiner, and Schmidt, 2025).
+Each jitter stimulus is drawn with its own recorded seed, since a jittered plot differs on every rendering.
+A design pilot of the tracing task with volunteer colleagues precedes the SDSS submission.
+The main study follows institutional review and OSF pre-registration, with a planning figure of about 100 participants.
 The larger perceptual study and the calibration of $\sigma$ are specified as future work (Section 3.3.2).
 
 ![The four treatments of the flea beetle data (document Section 4.7), on four integer-valued measurements with 33 to 46 distinct values each: exact values, `ggplot2`'s default jitter, factor coercion with `pcp_arrange`, and `tie_spread`. The black lines are the beetles at the two largest gaps in the data. The three numeric treatments share one geometry and show both as outlying; coercion draws each one level-gap from its neighbor. The numeric treatments differ inside the ties, which is where the tracing task looks.](images/memo_flea_coercion.png){#fig-memo-flea width="92%" fig-pos="H"}
 
 ### Structure and dissemination
 
-Seven sections became four, with related work (Section 1.1) added and organized by what each tradition does with coincident observations. Sixteen references are added. 
-The first presentation is a refereed submission to SDSS 2027 (Pittsburgh, April 27–29), due November 30, 2026. 
-The methods paper goes to the *Journal of Data Science, Statistics, and Visualisation*, which names visualization in its scope, charges no fees, requires reproducing code and data, and targets a three-month decision; the *Journal of Data Science* is the fallback. 
+Seven sections became four, with related work (Section 1.1) added and organized by what each tradition does with coincident observations. Twenty-three references are added, seven of them from the November scan.
+The first presentation is a refereed submission to SDSS 2027 (Pittsburgh, April 27–29), due November 30, 2026.
+The methods paper goes to the *Journal of Data Science, Statistics, and Visualisation*, which names visualization in its scope, charges no fees, requires reproducing code and data, and targets a three-month decision; the *Journal of Data Science* is the fallback.
 IEEE VIS, named in March, is retained in two forms: a short paper to VIS 2027 with the benchmarking results and the viewer-study pilot, decided in April once the main study's timing is known, and a full paper to VIS 2028 in TVCG with the complete study, after the defense.
 
 ## Current status
 
-The method is in the package as `pcp_spread_ties()`, a fourth wrangling step after `pcp_select()`, `pcp_scale()`, and `pcp_arrange()`, with `pcp_arrange_unified()` breaking both kinds of tie in one call. 
-All three processing modes, the separation parameter `sigma`, clamped bands, the per-axis `vars` argument, the `center` and `center_reference` arguments of `from-both`, `pcp_tie_boxes()` with a `min_n` threshold, `geom_pcp_tieboxes()` with the box, the value label, and the count label as separate options, and two diagnostics are built and exercised in the attached vignette on `iris`, the flea data, and the penguins. 
-The diagnostics warn when the gap between adjacent bands, $(1-\sigma)\,\delta_j$, falls below `min_gap` (0.005 of the axis by default) and when the spacing inside a band falls below `min_spacing` (0.001 by default), the saturation case. 
+The method is in the package as `pcp_spread_ties()`, a fourth wrangling step after `pcp_select()`, `pcp_scale()`, and `pcp_arrange()`, with `pcp_arrange_unified()` breaking both kinds of tie in one call.
+All three processing modes, the separation parameter `sigma`, clamped bands, the per-axis `vars` argument, the `center` and `center_reference` arguments of `from-both`, `pcp_tie_boxes()` with a `min_n` threshold, `geom_pcp_tieboxes()` with the box, the value label, and the count label as separate options, and two diagnostics are built and exercised in the attached vignette on `iris`, the flea data, and the penguins.
+The diagnostics warn when the gap between adjacent bands, $(1-\sigma)\,\delta_j$, falls below `min_gap` (0.005 of the axis by default) and when the spacing inside a band falls below `min_spacing` (0.001 by default), the saturation case.
 What remains: the `resolution` argument with its diagnostic; unit tests and reference documentation; the three benchmarking components; the viewer study; and the method and evaluation chapters.
 
 ## Adjusted timeline
 
-The plan runs from November 2026 to a defense in November 2027 and deposit in December 2027, with the incomplete resolved in January. 
+The plan runs from November 2026 to a defense in November 2027 and deposit in December 2027, with the incomplete resolved in January.
 The viewer study is the one item that waits on human subjects; a delay in institutional review moves the study, not the defense.
 
 | Period | Work | Milestone |
@@ -157,9 +188,9 @@ The viewer study is the one item that waits on human subjects; a delay in instit
 
 ## What the committee is asked to accept
 
-Three things. 
-That on a many-valued numeric axis, ties are the point at which a parallel coordinate plot stops keeping its promise, and that the published method, by its authors' own scoping, stops at the categorical axes. 
-That a band anchored to the measurement's resolution, ordered by the neighboring axis, and marked as the plot's doing keeps the promise without changing what the axis means, which Properties 1 and 2 establish. 
+Three things.
+That on a many-valued numeric axis, ties are the point at which a parallel coordinate plot stops keeping its promise, that the published method, by its authors' own scoping, stops at the categorical axes, and that the earlier spreading of Graham and Kennedy stops at axes with few values and space to spare.
+That a band anchored to the measurement's resolution, ordered by the neighboring axis, and marked as the plot's doing keeps the promise without changing what the axis means, which Properties 1 and 2 establish.
 And that whether viewers benefit is a question for viewers, which the study of Section 3.3.1 is designed to answer before the larger one is attempted.
 
 ## Questions for the committee

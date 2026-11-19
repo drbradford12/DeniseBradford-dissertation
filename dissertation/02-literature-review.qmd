@@ -55,6 +55,7 @@ At a tie, the polylines of all $k$ observations pass through the same point, and
 The observation's identity is not carried across the axis: a viewer following a line into the tie cannot tell which of the $k$ departing lines continues it, except by color, which is unreliable at small hue differences and unavailable under color vision deficiency (@sec-color).
 And the marginal density at $v$ is not visible: $k$ coincident lines occupy the same pixels as one.
 The original treatments of the display did not address either consequence [@inselberg1985; @wegman1990], and the survey of @heinrich2013 discusses overplotting as a density problem rather than as a tie problem.
+Graham and Kennedy [-@graham2003] stated the first consequence directly: when $N$ polylines meet at a point and part again, a reader has a one in $N$ chance of following the right one through it without some further cue; their remedies are taken up in @sec-earlier-spread.
 VanderPlas et al. [-@vanderplas2023] identify ties as the principal obstacle to following an observation from axis to axis, and observe that without that ability the display reverts to a sequence of bivariate views.
 
 In the terms used in the earlier draft of this chapter, a tie makes the mapping from data to position non-injective: distinct observations map to the same visual position, and the mapping cannot be inverted by inspection.
@@ -90,10 +91,13 @@ For the problem addressed here that is the wrong trade, because individual trace
 
 The second family resolves overplotting by moving points rather than blending them.
 Jittering [@chambers1983] adds a small random displacement to each coincident point; it is simple, but the displacement is not reproducible, carries no information, and at moderate multiplicity produces apparent structure that the data do not contain.
+A jittered plot is also a different plot on every rendering: it is a random graphic, in the vocabulary of @mason2026, and a conclusion drawn from one rendering need not hold for the next.
 Deterministic alternatives replace the random offset with a packing.
 The beeswarm layout, implemented for the grammar of graphics in `ggbeeswarm` [@clarke2023], places each point at the smallest lateral offset at which it does not overlap a previously placed point, so that the width of the resulting cloud approximates the local density; the quasirandom variant in the same package uses a low-discrepancy sequence to spread points within a kernel-density envelope.
 The beanplot of Kampstra [-@kampstra2008] combines a density outline with a one-dimensional rug of the individual observations.
 In two dimensions, the phyllotaxis construction analysed by Vogel [-@vogel1979] — successive points at the golden angle along a spiral whose radius grows as the square root of the point index — gives a packing of coincident points that is uniform in area and is used for the same purpose in scatterplots.
+Gatherplots [@park2023gatherplot] make the packing explicit for scatterplots: marks that share a position are gathered into a non-overlapping group, and in a crowdsourced study viewers judged distributions more accurately from gathered marks than from jittered ones.
+Their authors add a point about jitter that bears on the viewer study of Chapter 4: the displacement is uncertainty the plot introduces and does not communicate.
 
 These methods share the property the present work requires, namely that every observation becomes individually visible, and they are the correct point of departure for spreading ties on a numeric axis.
 Three features of the setting they were designed for do not carry over, and identifying them is what distinguishes the parallel-coordinates problem from the single-axis one.
@@ -114,6 +118,23 @@ None of the single-axis methods supplies such a mark, because in a single-axis d
 Chapter 3 develops a construction satisfying all three requirements; @fig-beeswarm-vs-tiespread places a `ggbeeswarm` layout and the proposed construction side by side on the same data to make the contrast visible.
 
 ![Single-axis beeswarm spreading (left) versus the `tie_spread` extension in a parallel-coordinates context (right), on the same 18-observation toy data. Both displace observations tied on Year B so that individual cases become visible. The beeswarm packs points by *local density*, so the heavily tied values (six cases each at 2000 and 2001) widen into clouds whose extent is governed by how many points must be packed, not by the axis scale; there is no neighboring axis, so there is nothing for the within-value ordering to cohere with. The `tie_spread` panel instead anchors every band to a fixed fraction of the axis resolution $\delta_j$ (blue boxes, identical height regardless of count) and orders each band by the Year A neighbor, so the polylines leaving Year B onto Value carry no avoidable crossings. The beeswarm shows *what* single-axis point separation achieves; the right panel shows the resolution anchoring and cross-axis sorting the multi-axis setting additionally requires.](figures/fig_beeswarm_vs_tiespread.png){#fig-beeswarm-vs-tiespread fig-scap="Single-axis beeswarm spreading versus tie spreading in a parallel coordinate plot."}
+
+### An earlier spread on parallel axes {#sec-earlier-spread}
+
+Spreading is not new on a single axis, and it is not new on parallel axes.
+Graham and Kennedy [-@graham2003] proposed two remedies for the crossover ambiguity of @sec-ties.
+The first replaces polylines with smooth curves, so that good continuation carries a line through a shared point.
+That remedy changes the geometry of the lines between axes and leaves the tied values coincident; it lies outside the scope of this work, which extends the positional tie-breaking of `ggpcp` and keeps its straight segments.
+The second is a spread: a shared point becomes a short line along the axis, enclosed by a bounding box that marks it as one value, with each line placed in proportion to its average position on the two neighboring axes.
+It was designed for axes with few discrete values, where empty space lies between the values; where that space ran out, a focus+context distortion enlarged the selected values at the expense of the rest.
+
+Two of the three requirements of @sec-multiaxis therefore have a precedent on parallel axes: placement informed by the neighboring axes, and a mark that says the spread is one value.
+A many-valued numeric axis requires three things that construction does not supply.
+First, there is no empty space to borrow and the scale cannot be distorted, so the allocation must be anchored to the axis resolution $\delta_j$ and be identical at every value.
+Second, a proportional average of two neighbors carries no guarantee: lines may still cross beside the axis, and observations with equal averages still coincide.
+A rank-matching against one already-processed neighbor, with even spacing, gives every observation a distinct position and removes within-band crossings entirely (@sec-ordering).
+Third, a band of fixed height cannot carry frequency, so frequency needs a device of its own.
+The point-separation goal, the neighbor-informed order, and the box are borrowed; the resolution anchoring, the two guarantees of Chapter 3, and the count label are what the many-valued numeric axis adds.
 
 ## Categorical Extensions of Parallel Axes {#sec-categorical}
 
@@ -239,6 +260,7 @@ The spacing formula (@eq-categorical-spacing) is retained unchanged; only the de
 | Display | Unit drawn | Frequency encoding | Individual tracing | Mixed types | Numeric ties |
 |---|---|---|---|---|---|
 | Classical PCP [@inselberg1985; @wegman1990] | Line | None (overplotting) | Yes, except through ties | No | Coincide |
+| PCP with spread points [@graham2003] | Line or curve, bounding box at spread values | None | Yes, for small numbers of lines | By numeric coding | Spread in empty space on few-valued axes |
 | Categorical PCP [@pilhofer2013] | Line | None (mesh) | No | By numeric coding | Coincide |
 | Parallel Sets [@kosara2006] | Ribbon | Ribbon width | No | By binning [@wang2022] | Not applicable |
 | Alluvial / Sankey [@rosvall2010; @brunson2020] | Ribbon | Ribbon width | No | By binning | Not applicable |
@@ -288,7 +310,12 @@ Preattentive detection is available for a small set of features and for a single
 It is a serial, attention-demanding task in which each local step is aided by continuation but the whole is not parallel.
 Two implications follow.
 Reducing the number of crossings at each step is worth doing, because it lowers the cost of each step of the trace; but claims about traceability are claims about a serial task and must be evaluated as such.
-Whether traceability survives tie-breaking in practice is an empirical question, which the proposal assigns to the deferred user study rather than to the perceptual argument.
+Whether traceability survives tie-breaking in practice is an empirical question, which the dissertation assigns to the viewer study of Chapter 4 rather than to the perceptual argument.
+
+Evidence on the tracing task itself is recent.
+Garner, Burton, and Fernstad [-@garner2024aspect] measured value tracing and correlation estimation in static parallel coordinate plots and found that accuracy on both depends on the aspect ratio of the display, the ratio of the distance between axes to their length.
+Meka, Kronsteiner, and Schmidt [-@meka2025aspect] study the readability of the display under varying aspect ratios, with correlation judgment as the task.
+A study that compares treatments of ties on a tracing task must therefore hold the aspect ratio fixed across conditions.
 
 ### External cognition {#sec-external}
 
@@ -347,7 +374,9 @@ It is NP-hard even when one layer is held fixed [@eades1994], and Martí and Lag
 One pair of parallel coordinate axes is an instance of this problem, and the sequential sweep of `pcp_arrange()` — fix the reference axis, order the current axis against it, freeze it, and move on — is a greedy one-sided heuristic in these terms.
 What makes the within-tie sub-problem tractable is its degeneracy: the $k$ observations tied at $v$ each connect to exactly one position on the reference axis, and for vertices of degree one the one-sided problem is solved exactly by sorting on the neighbor's position.
 Monotone rank-matching within a band is therefore an exact local optimum, and the crossings that remain after it are those the greedy global sweep cannot remove — an upper bound on the true minimum, not the minimum itself.
+Exact ordering has been pursued in a neighboring setting: Wallinger et al. [-@wallinger2025storysets] draw sets as curves through binned glyphs and give an exact algorithm for ordering the curves within the bins once the order of the glyphs is fixed; whether such an algorithm transfers to tie bands on metric axes is left to future work.
 Tie-breaking thus introduces a second source of crossings, distinct from axis order, and one that sorting removes completely at the band level.
+Recent work on categorical displays addresses the first two orderings and leaves this one alone: Rich, Oakes, and Pachter [-@rich2025alluvial] formalize the ordering of variables and strata in alluvial plots as an optimization problem and solve it heuristically, but each stratum moves as a block and the observations inside it are not reordered.
 The two mechanisms are complementary, and the proposal treats a favourable axis order as a precondition for effective tie-breaking rather than as something tie-breaking supplies.
 
 ## Computational Quality Metrics {#sec-metrics}
@@ -367,9 +396,10 @@ The metrics also make the comparison with hammock plots quantitative: Schonlau's
 ## Research Gap, Research Questions, and Contributions {#sec-gap}
 
 The review supports a precise statement of the gap.
-Every display in @tbl-designspace that shows individual observations lets tied observations coincide on a numeric axis; every display that shows marginal frequency does so by replacing observations with bands, or by discarding the metric scale through binning or factor coercion.
+Every display in @tbl-designspace that shows individual observations lets tied observations coincide on a numeric axis, with one exception, the spread of Graham and Kennedy [-@graham2003], which applies where an axis has few values and empty space between them; every display that shows marginal frequency does so by replacing observations with bands, or by discarding the metric scale through binning or factor coercion.
 No existing method spreads ties on an axis that remains numeric while preserving the spacing of distinct values, keeping the marginal density recoverable, and maintaining the traceability of each observation across the plot.
 The single-axis spreading literature (@sec-jitter) supplies the point-separation mechanism but not the resolution anchoring, cross-axis ordering, or explicit marking that the multi-axis setting requires (@sec-multiaxis).
+The earlier spread on parallel axes (@sec-earlier-spread) supplies placement informed by the neighbors and a bounding box, but no anchor to the scale of the axis, no guarantee against crossings, and no device for frequency.
 The categorical machinery of `ggpcp` (@sec-ggpcp) supplies the spacing formula and the hierarchical sorting, but is defined for frequency-proportional allocations.
 The perceptual literature (@sec-bounds) bounds the admissible displacement from both sides without fixing it.
 
@@ -385,6 +415,7 @@ Whether viewers can in fact trace observations through spread ties, and see the 
 What default value of the separation parameter $\sigma$, and what default visual-cue design, produce the best trade-off between the legibility of individual lines and the preservation of the gaps between adjacent values?
 Within the dissertation this question is answered computationally, by a sensitivity analysis that fixes $\sigma$ against criteria stated in physical units at reference figure sizes.
 The perceptual bounds that would validate those criteria — the just-noticeable-difference lower bound and any sine-illusion upper bound of @sec-bounds — remain open.
+The composition of the cue is open as well: the box is the provisional default, and the perceptual case against drawing it on a numeric axis is set out in Chapter 3 (@sec-annotation).
 
 **RQ3 (comparative value).**
 Does numerical tie-breaking improve the judgments viewers actually make on integer-heavy data, relative to what a user does with such an axis today, leaving the values exact or jittering them, and, at the boundary with the few-levels regime, relative to coercing the variable to a factor (@sec-regimes)?
@@ -394,18 +425,21 @@ The method should therefore help on tracing, the task parallel coordinate plots 
 The question is perceptual, and the dissertation answers it with viewers.
 The broader comparison against hammock plots and against GPCPs without tie-breaking, on synthetic data spanning the $(\sigma, \delta_j, k)$ grid, is left for future work.
 
-The corresponding contributions are: (1) the `tie_spread` algorithm: a resolution-anchored allocation for ties on numeric axes, the regime boundary that says where it applies and where the published categorical treatment does, and its formal unification with that treatment; (2) a `tidyselect`-grammar implementation that applies spreading per axis while preserving exact positioning on others; (3) a visual-cue grammar, the numerical analogue of `geom_pcp_boxes()` and `geom_pcp_labels()`, in which the band marks the tie and a count label carries the frequency the band cannot; (4) a computational benchmarking framework that adapts the ParSetgnostics metrics of @dennig2021 to individual-line displays, verifies the within-band crossing guarantee, and quantifies the sensitivity of layout quality to $\sigma$, $\delta_j$, and tie multiplicity; and (5) a viewer study comparing `tie_spread` with exact values, jitter, and, at the regime boundary, factor coercion on real integer-heavy data, together with a fully specified design for the larger perceptual evaluation and $\sigma$ calibration as future work.
+The corresponding contributions are: (1) the `tie_spread` algorithm: a resolution-anchored allocation for ties on numeric axes, the regime boundary that says where it applies and where the published categorical treatment does, and its formal unification with that treatment; (2) an implementation in `ggpcp`, `pcp_spread_ties()`, whose `tidyselect` `vars` argument applies spreading per axis while preserving exact positioning on others; (3) a visual-cue grammar, `geom_pcp_tieboxes()`, the numerical analogue of `geom_pcp_boxes()` and `geom_pcp_labels()`, in which the band marks the tie and a count label carries the frequency the band cannot; (4) a computational benchmarking framework that adapts the ParSetgnostics metrics of @dennig2021 to individual-line displays, verifies the within-band crossing guarantee, and quantifies the sensitivity of layout quality to $\sigma$, $\delta_j$, and tie multiplicity; and (5) a viewer study comparing `tie_spread` with exact values, jitter, and, at the regime boundary, factor coercion on real integer-heavy data, together with a fully specified design for the larger perceptual evaluation and $\sigma$ calibration as future work.
 
 The scope of the evaluation follows from this review.
 The claims the method makes — constant band geometry, preserved gaps, zero within-band crossings against the reference neighbor, predictable saturation — are geometric claims, and the metrics of @sec-metrics can verify them without human subjects.
 The claims the review cannot settle — whether a gap that exists on the page is seen, whether within-band displacement is read as artifact, and whether traceability holds for a serial task under tie-breaking — are perceptual.
 The dissertation tests the first of them directly in a deliberately narrow viewer study: one real integer-heavy dataset, the flea beetle measurements, with tracing and frequency-comparison tasks against exact values and jitter, and a boundary block against factor coercion that adds gap detection.
-The proposal specifies the larger four-task study against hammock plots (magnitude estimation, ordinal comparison, ratio judgment, and tracing) with hypotheses H1–H3, and the calibration of $\sigma$, so that they can be pre-registered and run without redesign.
+Two controls follow from the review: the aspect ratio is fixed across conditions (@sec-gestalt), and each jitter stimulus is drawn with its own recorded seed, since a jittered plot differs on every rendering (@sec-jitter).
+The proposal specifies the larger study against hammock plots, with four tasks (magnitude estimation, ordinal comparison, ratio judgment, and tracing) and a fifth, same-value judgment, that is specific to the cue; its hypotheses H1–H3 concern density and tracing, and H4 sets the box with its labels against the labels alone, predicting opposite directions on the same-value and ordinal-comparison tasks and no direction on tracing.
+Together with the calibration of $\sigma$, this study is specified so that it can be pre-registered and run without redesign.
 
 ## Chapter Summary and Transition {#sec-summary}
 
 This chapter has located the numerical ties problem within five bodies of literature and drawn a specific requirement from each.
 From the overplotting literature: individual traceability must be preserved, so positional adjustment rather than blending is the correct family, and its single-axis members must be extended with resolution anchoring, cross-axis ordering, and an explicit cue.
+The one earlier spread on parallel axes supplies placement by the neighbors and a bounding box, and it leaves the anchoring, the guarantees, and the count to be supplied (@sec-earlier-spread).
 From the categorical extensions: the hammock plot is the comparator, and the `ggpcp` categorical machinery — the spacing formula and hierarchical sorting — is the construction to generalize.
 From the grammar of graphics: spreading belongs in the data pipeline, selected per axis, with the visual cue as a geom.
 From the perceptual literature: the separation parameter is bounded below by a just-noticeable gap and above by the sine illusion, and color must not be load-bearing.
@@ -415,4 +449,3 @@ From the metrics literature: the evaluation can be computational, and the crossi
 Chapter 3 presents the `tie_spread` construction, its mathematical specification, and the visual-cue design (proposal Section 4).
 Chapter 4 reports the computational benchmarking and the viewer study (proposal Section 3.3).
 Chapter 5 discusses the results and specifies the larger perceptual study and the calibration of $\sigma$ left for future work (proposal Section 3.3.2).
-

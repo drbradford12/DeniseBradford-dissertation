@@ -15,6 +15,7 @@ Observations are drawn as polylines connecting a single point along each dimensi
 
 When multiple observations share the same value in a given dimension, their polylines perfectly overlap at that changepoint, creating "visual collisions" that mask information about the joint distribution between variables and obscure the density along a single axis.
 The treatment of ties is an aspect not generally addressed in the original parallel coordinate plots of Inselberg [-@inselberg1985] and Wegman [-@wegman1990].
+Graham and Kennedy [-@graham2003] named it as a crossover ambiguity: lines that share a point on an axis merge and separate again, and a reader cannot tell which is which afterwards.
 
 PCPs were canonically used to show continuous random variables, but their generalization to categorical data only exacerbated the problem of ties.
 The most straightforward treatment of categorical random variables, which is taken by Categorical PCPs [@pilhofer2013], is to assign each level a numeric value; this results in ties at any non-unique value for each variable (@fig-categorical-fix, panel a).
@@ -38,7 +39,7 @@ That is the problem this dissertation takes up.
 The dissertation extends the treatment of categorical variables in generalized PCPs by implementing a solution to tie-breaking in continuous variables.
 The solution has the following properties:
 
-- marginal density information (approximately) faithfully represented on the vertical axis
+- the number of observations at each tied value recoverable from the display, with position on the vertical axis still encoding magnitude
 - individual lines which can be visually distinguished, at least for data where the number of observations does not lead to overplotting
 - observations sorted hierarchically within the tied treatment in order to minimize extraneous line-crossings that lead to perceptual complexity.
 
@@ -46,7 +47,7 @@ An immediate consequence of the second objective is that the viewer will be able
 We extend the method used in `ggpcp` to represent categorical data to continuous variables, modifying it to maintain the approximate scaling of the continuous variable, with slight local distortions when tied values occur.
 In addition, we develop a consistent visual representation to provide visual cues which indicate the presence of a local distortion due to tied values, while preserving the visual representation of singular values on the parallel axis.
 
-Combining the density-preserving advantage of Hammock plots with the individual-observation traceability of generalized PCPs yields a display that carries marginal density on a numerical axis while retaining the full joint distribution and per-observation tracing that motivate GPCPs.
+Combining the frequency information that Hammock plots provide with the individual-observation traceability of generalized PCPs yields a display that reports the frequency of each tied value on a numerical axis, through a count label rather than through height, while retaining the full joint distribution and per-observation tracing that motivate GPCPs.
 Real-world data sets frequently have both categorical and numerical data, and duplicated values in either type of variable.
 Our extension of GPCPs extends the ability to visually represent, examine, and assess these data sets.
 

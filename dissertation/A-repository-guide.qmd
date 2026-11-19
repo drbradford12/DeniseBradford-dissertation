@@ -1,6 +1,6 @@
 # Repository Guide {#sec-appendix-repo}
 
-This appendix describes the project repository (`Code_DD`) as of November 8, 2026.
+This appendix describes the project repository (`Code_DD`) as of November 8, 2026, with the implementation file, the proposal, and the vignette updated to their versions of November 19, 2026.
 It explains how the additions to `ggpcp` fit the package's pipeline and feed the analysis, inventories what each part of the repository contains, proposes a structure for the copy that is shared, and reports the results of running the test suite.
 The `Literature Review` and `Updated numerical ties` folders were reviewed file by file, and `comprehensive_exam/` was reviewed for material to bring into the chapters.
 Other folders are described from their names only and are marked as not reviewed.
@@ -44,7 +44,7 @@ Third, the `pcp_ties` attribute records, for every band, the value, multiplicity
 
 Two points of scope apply to the current code.
 The functions are written to live inside `ggpcp`: the vignette calls them after `library(ggpcp)` without sourcing the file, so it runs only against a version of `ggpcp` that includes them, or after `source("pcp_spread_ties.R")`.
-Two elements of the November 9 revision of the proposal are not yet implemented: the `resolution` argument, with its diagnostic, and the count label. Missing values are outside the scope of the dissertation, and the code leaves them unchanged.
+The November 19 revision of the proposal records the first implementation phase as complete, including the count label; the `resolution` argument and its diagnostic are the next phase. Missing values are outside the scope of the dissertation, and the code leaves them unchanged.
 
 ## Inventory {#sec-appendix-inventory}
 
@@ -54,7 +54,7 @@ Two elements of the November 9 revision of the proposal are not yet implemented:
 | Path | Contents | Status and recommendation |
 |:--------------|:------------------|:-----------------|
 | `Bunny Trails/` | Not reviewed | Leave out of the shared copy |
-| `comprehensive_exam/` | The November 2026 proposal (`second_attempt.qmd`) and its revision memo, earlier proposal PDFs, advisor-annotated drafts, the 2025 exam presentation, and their images | Source of Chapter 1, two figures in Chapter 2, and parts of Chapter 3. Leave out of the shared copy; the advisers already hold the proposal |
+| `comprehensive_exam/` | The November 2026 proposal (`second_attempt.qmd`, rendered as `comp_exam_v2.pdf` on November 19) and its revision memo, earlier proposal PDFs, advisor-annotated drafts, the 2025 exam presentation, and their images | Source of Chapter 1, two figures in Chapter 2, and parts of Chapter 3. Leave out of the shared copy; the advisers already hold the proposal |
 | `Literature Review/` | Chapter 2 source, images, bibliography | Current; see @tbl-inventory-lit |
 | `numerical_tie_attempts/` | Eight earlier tie-breaking scripts (`even_space_ties.R`, `ggpcp_unit_test.R`, `ModifictationsPCP.R`, `Numerical_ties_pcp.R`, `toy_example.R`, `unified_tie_breaking.R`, `unified_tie_breaking_example.R`, `Updated_pcp_arrange.R`), `asthma.csv`, and `Updated numerical ties/` | Scripts not reviewed; their names suggest earlier versions of what `pcp_spread_ties.R` now does. Confirm, then move to `archive/`. Move `asthma.csv` to `data/`. See @tbl-inventory-ties |
 | `Code/` | Not reviewed | Sort into `scripts/` or `archive/` |
@@ -80,10 +80,10 @@ Two elements of the November 9 revision of the proposal are not yet implemented:
 
 | Path | Contents | Status and recommendation |
 |:--------------|:------------------|:-----------------|
-| `pcp_spread_ties.R` | The implementation (496 lines, base R plus `rlang`, `tidyselect`, `ggplot2`) | Current; `ggpcp-ties/R/` |
+| `pcp_spread_ties.R` | The implementation (565 lines in the November 19 version, base R plus `rlang`, `tidyselect`, `ggplot2`); adds `extent`, `min_n`, count labels (`counts`, `count_min_n`), and `box = FALSE` over the November 8 version | Current; `ggpcp-ties/R/` |
 | `test_pcp_spread_ties.R` | Base-R test suite, 11 groups, 36 checks | Current; `ggpcp-ties/tests/`. Sources the implementation from an absolute path (`/home/claude/work/...`) that exists on no other machine; change to a relative path |
 | `example_usage.R` | Worked examples: `iris`, penguins, per-axis `vars`, `from-both`, before/after, and $\sigma$ panels | Current and runs; needs `janitor`. `ggpcp-ties/examples/` |
-| `numerical-ties.qmd` | Package vignette, *Breaking ties on numeric axes* | Current; `ggpcp-ties/vignettes/` |
+| `numerical-ties.qmd` | Package vignette, *Breaking ties on numeric axes* (rendered November 19, 2026: `iris`, `flea` with `aede2` as a factor, penguins with saturation) | Current; `ggpcp-ties/vignettes/` |
 | `numerical_ties_method.qmd` | Chapter 3 source | Partly out of date; carry over the corrections listed in @sec-appendix-actions |
 | `figures/` | Chapter 3 figures | Replace with the versions regenerated for this draft |
 | `references.bib` | 61 entries, 12 keys entered twice | Merged into the single bibliography |
@@ -155,8 +155,8 @@ The following actions are listed in order of priority.
 
 ## Verification {#sec-appendix-tests}
 
-The test suite and the example script were run on November 8, 2026, with R 4.3.3, `ggpcp` 0.2.0 (installed from its GitHub repository), and `ggplot2` 3.4.4, after the source path in the test file was corrected.
-All 36 checks pass.
+The test suite and the example script were run on November 8, 2026, with R 4.3.3, `ggpcp` 0.2.0 (installed from its GitHub repository), and `ggplot2` 3.4.4, after the source path in the test file was corrected, and the suite was run again on November 19 against the updated implementation.
+All 36 checks pass in both runs.
 `example_usage.R` runs to completion; because `janitor` was not available in the build environment, `janitor::clean_names()` was replaced by an equivalent one-line function for this run.
 The only messages are the diagnostic warnings described in Chapter 3: the inter-band gap warning on every numerical axis of `iris` and of the penguins at $\sigma = 0.9$, and saturation warnings for heavily tied values on several axes, including nine values of penguin body mass.
 
