@@ -61,7 +61,7 @@ theme_set(theme_bw(base_size = 11))
 
 A parallel coordinate plot makes one promise: every observation can be followed across the whole dataset as a single unbroken line. 
 The promise breaks at the most ordinary place in real data. 
-Two patients with the same number of hospital visits, two beetles measured to the same micrometre, two penguins weighed to the same 25 grams: where their values coincide, their lines meet at a point and leave it as a fork with no signpost, and a reader who was following one of them can no longer say which way it went. 
+Two patients with the same number of hospital visits, two beetles measured to the same micrometer, two penguins weighed to the same 25 grams: where their values coincide, their lines meet at a point and leave it as a fork with no signpost, and a reader who was following one of them can no longer say which way it went. 
 `ggpcp` repaired the promise on categorical axes. 
 This proposal repairs it on numeric axes, where the axis must also keep telling the truth about magnitude: it spreads the tied lines apart within the resolution of the measurement, orders them so that they leave the fork without crossing, and marks the spot so that the reader knows the spread is the plot's doing and not the data's.
 
@@ -813,7 +813,7 @@ At $\sigma = 0.9$ the first warning fires whenever $\delta_j < 0.05$, that is, o
 The many-valued regime the method is built for therefore triggers the warning at the provisional defaults, and the pairing of $\sigma$ with `min_gap` is part of what RQ2 must settle. 
 The third diagnostic accompanies the `resolution` argument and remains to be built: when the smallest gap on an axis is far below the typical gap, which signals a data anomaly or mixed precision, the software reports the axis and the values involved and recommends an override or coercion.
 
-The provisional default $\sigma = 0.9$ reserves $10\%$ of the resolution band as a gap.
+The provisional default $\sigma = 0.9$ reserves $10\%$ of the resolution band as a gap (@fig-sigma shows three values of $\sigma$ side by side).
 It is provisional precisely because the two perceptual bounds that bracket a defensible value are not yet established: the gap must remain above the just-noticeable-difference threshold so that adjacent bands are not read as a single value (@sec-math-step3), while the spread should remain small enough that within-band displacement is not misread as genuine variance.
 The empirical calibration of $\sigma$ with human observers, varying $\sigma$ over a grid at several axis resolutions $\delta_j$ and tie multiplicities $k$, and selecting the largest $\sigma$ that keeps band-separation errors below a pre-set threshold, is specified as future work (@sec-evaluation). 
 Within the dissertation, the same $(\sigma, \delta_j, k)$ grid is exercised computationally: the sensitivity analysis of @sec-evaluation quantifies how the adapted layout-quality metrics respond to $\sigma$ across resolutions and multiplicities, identifying the region where quality is stable (making the eventual calibrated choice forgiving) and the region where it degrades sharply (where calibration precision will matter most).
@@ -982,11 +982,12 @@ The dissertation takes up the case the paper set aside.
 Which treatment a numeric variable needs depends on how many distinct values it takes and how its ties are distributed, and the published method is the base case.
 
 1. *Few integer levels* (a count of comorbidities, a Likert item, the number of cylinders in `mtcars`). Coercing the variable to a factor and applying `pcp_arrange` is the right treatment, unchanged. The levels are few and usually equally spaced, so little metric information is lost, and frequency-proportional boxes give the histogram reading a viewer expects from such a variable. `tie_spread` is not applied.
-2. *Many distinct values with scattered ties* (flipper length in millimetres, the beetle measurements in micrometres, ages in years). A user here leaves the values exact, which collapses each tie to a point, or jitters, which separates the lines at random; coercion replaces the metric scale with dozens of equally-spaced levels and turns the boxes into slivers (@fig-flea-coercion, bottom left). This is the regime `tie_spread` is built for: it spreads each tie within a band of fixed height at the value's true position, so that the gaps between values survive and lines can be traced through the tie.
+2. *Many distinct values with scattered ties* (flipper length in millimeters, the beetle measurements in micrometers, ages in years). A user here leaves the values exact, which collapses each tie to a point, or jitters, which separates the lines at random; coercion replaces the metric scale with dozens of equally-spaced levels and turns the boxes into slivers (@fig-flea-coercion, bottom left). This is the regime `tie_spread` is built for: it spreads each tie within a band of fixed height at the value's true position, so that the gaps between values survive and lines can be traced through the tie.
 3. *Near-continuous* (a measurement recorded to many decimal places). Ties are rare or absent, there is nothing to spread, and `tie_spread` leaves the axis unchanged and reports that it did so.
 
 Within the second regime there is an inner limit: when a single value is shared by very many observations, the fixed-height band saturates (@sec-math), and the count label rather than the spread carries the information. 
-The per-axis interface (contribution 2 of @sec-questions; the `vars` argument of `pcp_spread_ties()`) is how a user applies these regimes within one plot: coercion on the few-valued axes, `tie_spread` on the many-valued ones, nothing on the continuous ones.
+The per-axis interface (contribution 2 of @sec-questions; the `vars` argument of `pcp_spread_ties()`) is how a user applies these regimes within one plot: coercion on the few-valued axes, `tie_spread` on the many-valued ones, nothing on the continuous ones. 
+@fig-flea-regimes shows the first two together on the flea beetle data.
 
 **What is inherited and what is new.** 
 The hierarchical sorting is inherited unchanged: `tie_spread` orders the observations in a band by their positions on the already-processed neighbor, exactly as `pcp_arrange` orders the observations in a level. 
@@ -1100,6 +1101,105 @@ The design adopted here uses a light gray bounding box, anchored at the lower an
 The box stops short of the allocation $[L(v), U(v)]$ by the margins, and the reason is the same separation requirement that motivates $\sigma$. 
 Allocations at adjacent tied values share an edge, so boxes drawn to the allocation merge into a single gray column wherever consecutive values are all tied, and the axis reads as one tie where the values differ. 
 Drawn to the dot-placement region, the boxes are separated by the same gap as the observations, $(1-\sigma)\,\delta_j$, and distinct values read as distinct boxes. 
+@fig-box-extent shows both extents on the same axes.
+
+```{r}
+#| label: cue-helpers
+#| include: false
+
+# The figures of the cue are drawn with the package functions sourced in the
+# setup chunk: pcp_spread_ties(), pcp_tie_boxes(), geom_pcp_tieboxes().
+cue_cols <- c(setosa = "#E69F00", versicolor = "#56B4E9", virginica = "#009E73")
+
+cue_iris <- iris %>%
+  rename_with(~ tolower(gsub(".", "_", .x, fixed = TRUE)))
+
+cue_before <- cue_iris %>%
+  pcp_select(sepal_length:species) %>%
+  pcp_scale("uniminmax") %>%
+  pcp_arrange("from-right")
+
+cue_spread <- pcp_spread_ties(cue_before, "from-right", sigma = 0.9, min_gap = 0)
+cue_boxes  <- pcp_tie_boxes(cue_spread, boxwidth = 0.2, original = cue_iris)
+
+# Restrict a layout and its boxes to adjacent axes without recomputing
+# positions, so every segment is the one drawn in the full plot.
+keep_axes <- function(data, boxes, axes) {
+  all_axes <- levels(data$pcp_x)
+  stopifnot(all(axes %in% all_axes), all(diff(match(axes, all_axes)) == 1))
+  shift <- match(axes[1], all_axes) - 1
+  list(
+    data  = data %>%
+      ungroup() %>%
+      dplyr::filter(pcp_x %in% axes) %>%
+      mutate(pcp_x = droplevels(pcp_x)),
+    boxes = boxes %>%
+      dplyr::filter(pcp_x %in% axes) %>%
+      mutate(axis_index = axis_index - shift, xmin = xmin - shift, xmax = xmax - shift)
+  )
+}
+
+# One plot from the three elements of the cue: the box (behind the lines), the
+# value labels and the count labels (in front of them).
+cue_plot <- function(data, boxes, labels = TRUE, box = TRUE, min_n = 5,
+                     colours = cue_cols, boxwidth = 0.2) {
+  p <- ggplot(data, aes_pcp())
+  if (box) p <- p + geom_pcp_tieboxes(boxes)
+  p <- p +
+    geom_pcp_axes() +
+    geom_pcp(aes(colour = species), alpha = 0.5)
+  if (labels) {
+    p <- p + geom_pcp_tieboxes(boxes[boxes$n >= min_n, , drop = FALSE],
+                               box = FALSE, labels = TRUE, count_min_n = min_n)
+  }
+  if (any(data$pcp_class == "factor")) {
+    p <- p + geom_pcp_boxes(boxwidth = boxwidth) + geom_pcp_labels()
+  }
+  p +
+    theme_pcp() +
+    scale_colour_manual(values = colours) +
+    theme(legend.position = "none")
+}
+
+# Three adjacent axes, and the window of petal widths 1.0 to 1.5 cm, in which
+# every value on the 0.1 cm grid is tied.
+cue_axes   <- c("sepal_width", "petal_length", "petal_width")
+cue_zoom   <- keep_axes(cue_spread, cue_boxes, cue_axes)
+cue_window <- cue_zoom$boxes %>%
+  dplyr::filter(pcp_x == "petal_width", between(as.numeric(label), 1.0, 1.5)) %>%
+  with(range(ymin, ymax) + c(-0.01, 0.01))
+```
+
+```{r}
+#| label: fig-box-extent
+#| echo: false
+#| fig-pos: "H"
+#| fig-width: 9
+#| fig-height: 7.5
+#| fig-cap: "The extent of the tie box, on three adjacent `iris` axes. In each row the right
+#|   panel shows the axes at full height and the left panel magnifies the shaded window,
+#|   petal widths 1.0 to 1.5 cm, in which every value on the 0.1 cm grid is tied. Top: boxes
+#|   drawn to the full allocation $[L(v), U(v)]$ share their edges and merge into one gray
+#|   column, on petal width and on sepal width alike, although the values differ. Bottom:
+#|   boxes drawn to the dot-placement region are separated by $(1-\\sigma)\\,\\delta_j$,
+#|   and each tied value has a box of its own."
+
+cue_band <- keep_axes(cue_spread,
+                      pcp_tie_boxes(cue_spread, boxwidth = 0.2, original = cue_iris,
+                                    extent = "band"),
+                      cue_axes)
+
+p_band <- cue_plot(cue_band$data, cue_band$boxes, labels = FALSE) +
+  labs(title = "Box drawn to the allocation") +
+  facet_zoom(ylim = cue_window, zoom.size = 1.5)
+
+p_inner <- cue_plot(cue_zoom$data, cue_zoom$boxes, labels = FALSE) +
+  labs(title = "Box drawn to the dot-placement region") +
+  facet_zoom(ylim = cue_window, zoom.size = 1.5)
+
+p_band / p_inner
+```
+
 This choice follows directly from the categorical tie-breaking convention already implemented in `ggpcp`, where gray boxes group observations within each categorical level. 
 Extending the same visual element to numerical tie regions creates a unified grammar: a gray box in any axis region signals "these positions are spread for legibility, not because the underlying values differ." 
 This consistency reduces the cognitive overhead required to interpret mixed categorical-numerical plots.
@@ -1128,7 +1228,7 @@ On a numeric axis the same enclosure turns each tied value into a bin, and an ax
 Where every value on the grid is tied, as on petal width in `iris`, the boxes are separated only by $(1-\sigma)\,\delta_j$; when that gap falls below what the eye resolves, they fuse into a column, and the reader sees one tie where the values differ.
 
 *It offers a height that says nothing about frequency.* 
-A graphic should express the facts in the data and only those facts [@mackinlay1986], and length is among the elementary judgments by which viewers extract a quantity from a graph [@cleveland1984graphical]. 
+A graphic should express the facts in the data and only those facts [@mackinlay1986], and length is among the elementary judgments by which viewers extract a quantity from a graph [@cleveland1984]. 
 In the same plot, the height of a categorical box is a frequency. 
 A numeric box has the same height at every value, so a reader who has learned the categorical convention is invited to read equal heights as equal counts. 
 The shared grammar is a strength of the design (@sec-novelty); here it is also a liability.
@@ -1147,7 +1247,32 @@ The case for the box is the one made above: it marks the spread as artifact, and
 The two labels weaken that case, because the value label marks where the tie is and the count label states its size, and neither needs a box. 
 What the labels do not show is the extent of the spread, and that is the box's remaining claim. 
 Argument does not settle the matter. 
-The box stays the provisional default, and the comparison of the two cues, the box with its labels against the labels alone, is part of RQ2 and is specified for the future perceptual study (@sec-future-perceptual).
+The box stays the provisional default, and the comparison of the two cues, the box with its labels against the labels alone, is part of RQ2 and is specified for the future perceptual study (@sec-future-perceptual). 
+@fig-box-vs-labels draws the two cues on the same axes, so that the arguments on both sides can be checked against what the reader sees.
+
+```{r}
+#| label: fig-box-vs-labels
+#| echo: false
+#| fig-pos: "H"
+#| fig-width: 9
+#| fig-height: 7.5
+#| fig-cap: "The two cues compared in the case against the box, on the axes and window of
+#|   @fig-box-extent. Top: the gray box with the value label and the count label. Bottom:
+#|   the two labels alone. Labels are shown for values shared by five or more flowers and
+#|   are drawn in front of the lines. Without the box, the value label still marks where a
+#|   tie is and the count label still states its size; what is no longer shown is how far
+#|   the spread extends."
+
+p_box <- cue_plot(cue_zoom$data, cue_zoom$boxes) +
+  labs(title = "Box with value and count labels") +
+  facet_zoom(ylim = cue_window, zoom.size = 1.5)
+
+p_labels <- cue_plot(cue_zoom$data, cue_zoom$boxes, box = FALSE) +
+  labs(title = "Value and count labels alone") +
+  facet_zoom(ylim = cue_window, zoom.size = 1.5)
+
+p_box / p_labels
+```
 
 The rendering of these boxes is a short pipeline that consumes the output of the tie-breaking step. 
 `pcp_spread_ties()` stores the geometry of every band with its result, as the attribute `"pcp_ties"`; `pcp_tie_boxes()` turns that into a data frame of rectangles, with `boxwidth` setting their width, `min_n` suppressing boxes for bands of few observations, and `extent` choosing between the dot-placement region (the default) and the full allocation; and `geom_pcp_tieboxes()` draws them, mirroring `geom_pcp_boxes()` and `geom_pcp_labels()` on categorical axes. 
@@ -1333,7 +1458,7 @@ $$ {#eq-assign}
 #### Properties of the Construction {#sec-math-props}
 
 Two guarantees follow from Steps 1–6. 
-Both are argued informally elsewhere in this document; they are stated here as properties so that what the method promises is exact. 
+Both are argued informally elsewhere in this document; they are stated here as propositions so that what the method promises is exact. 
 Throughout, $\delta_j$ is the resolution of @eq-resolution, and the standing hypothesis is that no two distinct values on axis $j$ are closer than the resolution, $|v - v'| \geq \delta_j$ for all distinct $v, v' \in Y_j$. 
 Under the default of Step 1 this holds with equality for the closest pair; a user override larger than the smallest gap violates it, which is the condition the resolution diagnostic reports.
 
@@ -1370,7 +1495,7 @@ Let axis $j$ be processed with reference neighbor $A_j$, already processed, and 
 <!-- The two orderings agree, so the product in the statement is positive. -->
 <!-- ::: -->
 
-The second proposition concerns one band and one pair of adjacent axes. 
+The second property concerns one band and one pair of adjacent axes. 
 It says nothing about crossings between observations in different bands, or between an observation in a band and an untied one; those are determined by the data and the axis order, and @sec-sorting explains why the one-pass sweep does not minimize them globally. 
 The initial axis of a sweep has no reference neighbor and takes its within-band order from the input; @prp-crossings then applies to the next axis, which is sorted against it.
 
@@ -1396,7 +1521,8 @@ The innovation in extending the categorical procedure to numerical variables lie
 
 After applying the tie-breaking algorithm, observations that previously overlapped become visually distinguishable (@fig-uniform-spacing). 
 Tie regions can additionally be annotated with boxes showing the original value and the spread region (@fig-annotated), and the construction of the boxes that `pcp_tie_boxes()` returns is illustrated in @fig-tie-box. 
-The figures in this section are drawn with a self-contained reference implementation of Steps 1–6, so that the document compiles against the published package; `pcp_spread_ties()` implements the same steps, and the package vignette shows its output on `iris`, the flea beetle data, and the penguins.
+@fig-uniform-spacing, @fig-annotated and @fig-flea-coercion are drawn with a self-contained reference implementation of Steps 1–6. 
+The figures of the cue (@fig-box-extent and @fig-box-vs-labels), @fig-sigma and @fig-flea-regimes are drawn with `pcp_spread_ties()` and `geom_pcp_tieboxes()` themselves, which are sourced when the document is compiled; the package vignette shows the same functions on `iris`, the flea beetle data, and the penguins.
 
 ```{r}
 #| label: fig-uniform-spacing
@@ -1536,19 +1662,51 @@ p_full + p_zoom + plot_layout(widths = c(2.4, 1))
 #| fig-width: 9
 #| fig-height: 5
 #| fig-cap: "The same layout as @fig-uniform-spacing with each tie band labeled by the original
-#|   tied value, the numerical analog of `geom_pcp_labels`. Labels are placed at the band
+#|   tied value, the numerical analog of `geom_pcp_labels`, and, where three or more
+#|   observations share the value, by the count $n(v)$. Labels are placed at the band
 #|   centre, which is the true value $v$, so the displacement inside the band can be read as
-#|   artifact and the value recovered exactly. Where bands on an axis are closer together
+#|   artifact and the value recovered exactly. The band has the same height at every value,
+#|   so the count label is the only element of the cue that states frequency. Where bands on an axis are closer together
 #|   than a label's height, later labels are suppressed rather than overprinted; this is
 #|   the clutter threshold below which @sec-defaults proposes suppressing boxes."
 
 p_full +
   geom_text(data = arrange(bands, desc(k)), 
-            aes(x = axis + half_w + 0.03, y = (lo + hi) / 2, label = value),
+            aes(x = axis + half_w + 0.03, y = (lo + hi) / 2,
+                label = ifelse(k >= 3, paste0(value, "  (n = ", k, ")"), value)),
             hjust = 0, size = 2.4, colour = "grey25", check_overlap = TRUE)
 ```
 
 ![The tie box pipeline. (1) Identify tied values; (2) scale the axis and spread each tie within its resolution band of height $\delta_j$ with `pcp_spread_ties()`, which records the band geometry; (3) return one rectangle per band with `pcp_tie_boxes()` and draw it, labeled with the original tied value, with `geom_pcp_tieboxes()`.](images/math_images/spacing_tie_box.png){#fig-tie-box width=90% fig-pos="H"}
+
+@fig-sigma shows what the separation parameter trades. 
+At $\sigma = 0.5$ half of each allocation is gap: neighboring bands stand well apart, and the lines inside a band are packed into half the resolution. 
+At $\sigma = 0.9$ the lines inside a band have nearly the whole resolution to themselves, and the gap between neighbors is a tenth of it. 
+The provisional default sits at the end where the observations in a band are easiest to tell apart and the bands themselves are hardest; which end a viewer needs is the question RQ2 asks (@sec-defaults).
+
+```{r}
+#| label: fig-sigma
+#| echo: false
+#| fig-pos: "H"
+#| fig-width: 9
+#| fig-height: 4.2
+#| fig-cap: "The separation parameter, in the window of @fig-box-extent: the same three
+#|   `iris` axes and the same tied values at $\\sigma = 0.5$, $0.7$ and $0.9$. Each box
+#|   covers $\\sigma \\cdot \\delta_j$ and the gap between neighboring boxes is
+#|   $(1-\\sigma)\\,\\delta_j$; on petal width, where $\\delta_j = 0.042$, the gap is
+#|   $0.021$, $0.013$ and $0.004$ of the axis. The allocation, and so the position of
+#|   every band, is the same in all three panels."
+
+sigma_panel <- function(s) {
+  d <- pcp_spread_ties(cue_before, "from-right", sigma = s, min_gap = 0, min_spacing = 0)
+  z <- keep_axes(d, pcp_tie_boxes(d, boxwidth = 0.2, original = cue_iris), cue_axes)
+  cue_plot(z$data, z$boxes, labels = FALSE) +
+    coord_cartesian(ylim = cue_window) +
+    labs(title = bquote(sigma == .(s)))
+}
+
+wrap_plots(lapply(c(0.5, 0.7, 0.9), sigma_panel), nrow = 1)
+```
 
 @fig-uniform-spacing and @fig-annotated show the method working; they do not show how it compares with what a user would otherwise do. 
 @fig-flea-coercion makes that comparison on the flea beetle data [@lubischew1962], 74 beetles of three species measured on six integer-valued variables, restricted to the four measurements in the regime `tie_spread` is built for (@sec-novelty): `tars1`, `tars2`, `aede1`, and `aede3` take 46, 33, 34, and 33 distinct values, and on each of them between 48 and 62 of the 74 beetles share their value with at least one other beetle, in groups of up to seven. 
@@ -1638,6 +1796,39 @@ p_fac <- ggplot(pcp_fac, aes_pcp()) +
 
 (p_exact + p_jitter) / (p_fac + p_ts)
 
+```
+
+@fig-flea-coercion applies one treatment to every axis. 
+A user does not have to: the treatments are chosen by regime, axis by axis (@sec-novelty). 
+In @fig-flea-regimes all six measurements are shown. 
+`aede2` takes nine values and is converted to a factor, so `pcp_arrange` breaks its ties and its boxes show frequency by height. 
+The other five stay numeric and `tie_spread` spreads their ties within the resolution; `head`, with 13 values, is the boundary case and is kept numeric here. 
+One call, `pcp_arrange_unified()`, applies both steps.
+
+```{r}
+#| label: fig-flea-regimes
+#| echo: false
+#| fig-pos: "H"
+#| fig-width: 9
+#| fig-height: 5.5
+#| fig-cap: "Two regimes in one plot of the flea beetle data, with species at both ends.
+#|   `aede2` (nine values) is treated as a factor: its levels are boxes whose height is
+#|   frequency. The other five measurements are numeric: each tied value has a gray box of
+#|   fixed height at its true position, and values shared by four or more beetles carry a
+#|   value label and a count label. The metric scale of the numeric axes is intact, and
+#|   the frequency reading of the factor axis is intact."
+
+flea_reg <- GGally::flea %>%
+  mutate(aede2 = factor(aede2)) %>%
+  pcp_select(species, tars1:aede3, species) %>%
+  pcp_scale("uniminmax") %>%
+  pcp_arrange_unified("from-right", sigma = 0.9, min_gap = 0)
+
+flea_reg_boxes <- pcp_tie_boxes(flea_reg, boxwidth = 0.15, original = GGally::flea)
+
+cue_plot(flea_reg, flea_reg_boxes, min_n = 4, colours = flea_cols, boxwidth = 0.15) +
+  scale_x_discrete(labels = function(x) sub("\\.1$", "", x)) +     # species appears twice
+  theme(legend.position = "bottom", legend.title = element_blank())
 ```
 
 

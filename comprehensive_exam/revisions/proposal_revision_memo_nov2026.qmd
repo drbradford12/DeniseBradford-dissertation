@@ -2,14 +2,13 @@
 title: "Proposal Revision Memo and Adjusted Timeline"
 subtitle: "*A Grammar of Graphics Approach to Managing Numerical Ties in Parallel Coordinate Plots*, November 2026 revision"
 author: "Denise Bradford"
-date: "`r format(Sys.Date(), '%B %Y')`"
+date: today
 date-format: "MMMM YYYY"
 format:
   pdf:
     documentclass: article
     papersize: letter
-    geometry:
-      - margin=1in
+    geometry: margin=1in
     fontsize: 11pt
     colorlinks: true
     number-sections: false
@@ -25,7 +24,7 @@ This memo accompanies the November 2026 revision of the preliminary examination 
 The revision has the shape of a story in three stages. 
 In March, the committee read a method that disagreed with itself about the one thing it had to decide, how tall a tie band should be. 
 Over the summer and fall, multiple rounds of criticism, the committee's and reviewers', forced the method to say exactly what it claims, where it applies, and what it inherits from the published categorical method. 
-The November draft is the third stage: one specification, two propositions with proofs, a baseline that a user would actually choose, and a study that puts the claim in front of viewers. 
+The November draft is the third stage: one specification, two properties, a baseline that a user would actually choose, and a study that puts the claim in front of viewers. 
 The criticism made the document; this memo records what it changed. 
 Section numbers refer to the November document.
 
@@ -91,7 +90,7 @@ A count label giving $n(v)$ joins the box and the value label as a first-class e
 - **The box is contested (Section 4.5).** 
 \textcolor{blue}{New.} 
 The gray box stays the provisional default, and the section now states the perceptual case against it: enclosure groups tied values into bins on a metric axis; a box of constant height invites a frequency reading it cannot support; boxes add clutter where the lines converge; and their edges may slow tracing. 
-A box now covers only the region its observations occupy, so boxes at adjacent tied values no longer merge into a column. 
+A box now covers only the region its observations occupy, so boxes at adjacent tied values no longer merge into a column (document Figure 15), and the box is drawn beside the labels alone in Figure 16. 
 The box against the labels alone is part of RQ2 and a factor in the future perceptual study (Section 3.3.2), with a same-value task added to test what the box is for.
 - **Corrections.** 
 March said that `space` and `method` already spread numeric values and that `ggpcp` handles ties "in continuous variables." 
@@ -160,7 +159,7 @@ The viewer study is the one item that waits on human subjects; a delay in instit
 
 Three things. 
 That on a many-valued numeric axis, ties are the point at which a parallel coordinate plot stops keeping its promise, and that the published method, by its authors' own scoping, stops at the categorical axes. 
-That a band anchored to the measurement's resolution, ordered by the neighboring axis, and marked as the plot's doing keeps the promise without changing what the axis means, which Propositions 1 and 2 establish. 
+That a band anchored to the measurement's resolution, ordered by the neighboring axis, and marked as the plot's doing keeps the promise without changing what the axis means, which Properties 1 and 2 establish. 
 And that whether viewers benefit is a question for viewers, which the study of Section 3.3.1 is designed to answer before the larger one is attempted.
 
 ## Questions for the committee
