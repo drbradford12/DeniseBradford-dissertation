@@ -47,26 +47,28 @@ The remaining changes answer two rounds of feedback on the circulated draft: wha
 Every tied value receives a band of height $S(v) = \delta_j$, the axis resolution, whatever its multiplicity. 
 A numeric axis encodes magnitude; a band that grew with frequency would spend that encoding on something else.
 - **Separation parameter (Equations 6–8, 10).** 
-$\sigma \in (0, 1]$ sets the margins $S^{\pm}(v) = (1-\sigma)\,S(v)/2$, the spacing $\Delta(v) = \sigma S(v)/(k-1)$, and the positions. 
+$\sigma \in (0, 1]$, the `sigma` argument, sets the margins $S^{\pm}(v) = (1-\sigma)\,S(v)/2$, the spacing $\Delta(v) = \sigma S(v)/(k-1)$, and the positions. 
 The margins are a fraction of the realized allocation, so the clamped boundary case needs no separate formula. March's $\beta$, minimum spacing, and $\varepsilon$ are removed.
 - **Resolution (Section 4.6.3.1).** 
 \textcolor{blue}{New.} 
 $\delta_j$ is the grid on which a variable is recorded. 
-Its default is the smallest gap between adjacent distinct values, the quantity `ggplot2::resolution()` computes, and a `resolution` argument overrides it in data units. 
-The minimum gap is not robust; a diagnostic reports when it is far below the typical gap and recommends an override.
+Its default is the smallest gap between adjacent distinct values, and a `resolution` argument overrides it in data units. 
+For a variable stored as a double the default is what `ggplot2::resolution()` computes; for an integer column that function returns 1 whatever the gaps, and the smallest gap is used. 
+The minimum gap is not robust; a diagnostic reports when it is far below the typical gap and recommends an override. 
+The default is in the package; the argument and the diagnostic are not yet.
 - **Sorting (Sections 4.3, 4.6.3.5).** 
 Inherited from `pcp_arrange` unchanged. 
 Within one band, ordering by position on the reference neighbor yields zero within-band crossings; that result is exact. 
 Across axes, the one-pass sweep is a greedy heuristic for an NP-hard problem, and the draft says so. 
-The `from-both` seam and the initial axis of every sweep are specified.
+The `from-both` seam (`center`, `center_reference`) and the initial axis of every sweep are specified.
 - **High-multiplicity limit (Section 4.6.3.4).** 
 \textcolor{blue}{New.} 
 The band does not grow with $k$, so at some $k^\star$ adjacent dots overlap. 
-Metric spacing, inter-band gaps, and zero within-band crossings all hold; only dot legibility degrades, and the count label carries the frequency.
-- **Propositions (Section 4.6.3.7).** 
+Metric spacing, inter-band gaps, and zero within-band crossings all hold; only dot legibility degrades, the package warns when the spacing inside a band falls below `min_spacing`, and the count label carries the frequency.
+- **Properties (Section 4.6.3.7).** 
 \textcolor{blue}{New.} 
-Proposition 1, metric preservation: order is preserved, no observation moves more than $\delta_j/2$, bands away from the axis ends are centered on their values, and adjacent bands are separated by at least $(1-\sigma)\,\delta_j$. 
-Proposition 2, no within-band crossings. 
+Property 1, metric preservation: order is preserved, no observation moves more than $\delta_j/2$, bands away from the axis ends are centered on their values, and adjacent bands are separated by at least $(1-\sigma)\,\delta_j$, or three quarters of that next to a band clamped at an axis end. 
+Property 2, no within-band crossings. 
 Both rest on one hypothesis, that distinct values are at least $\delta_j$ apart, which the default satisfies and the diagnostic enforces.
 - **Unified framework (Table 2; Figures 11–12).** 
 All five quantities, $S$, $S^{+}$, $S^{-}$, $n$, and spacing, are mapped between the categorical and numeric cases, and the two parameter keys share one layout (@fig-memo-worked).
@@ -82,10 +84,15 @@ The section cites the JCGS paper's own scoping of `pcp_arrange` to the case wher
 - **Three regimes.** 
 Few integer levels: coercion to a factor is the right treatment, unchanged. 
 Many distinct values with scattered ties: coercion turns the axis into thin, equally spaced level boxes and discards the metric scale, and `tie_spread` applies. 
-Near-continuous: nothing to spread, and the software says so. The per-axis interface applies the regimes within one plot.
+Near-continuous: nothing to spread, and the software says so. The per-axis interface, the `vars` argument, applies the regimes within one plot.
 - **Density has its own device (Section 4.5).** 
 A categorical box is a histogram bar; a numeric band is not, since its height is fixed. 
 A count label giving $n(v)$ joins the box and the value label as a first-class element of the cue, on by default above a count threshold.
+- **The box is contested (Section 4.5).** 
+\textcolor{blue}{New.} 
+The gray box stays the provisional default, and the section now states the perceptual case against it: enclosure groups tied values into bins on a metric axis; a box of constant height invites a frequency reading it cannot support; boxes add clutter where the lines converge; and their edges may slow tracing. 
+A box now covers only the region its observations occupy, so boxes at adjacent tied values no longer merge into a column. 
+The box against the labels alone is part of RQ2 and a factor in the future perceptual study (Section 3.3.2), with a same-value task added to test what the box is for.
 - **Corrections.** 
 March said that `space` and `method` already spread numeric values and that `ggpcp` handles ties "in continuous variables." 
 Neither is so, and both are corrected. 
@@ -116,7 +123,7 @@ The larger perceptual study and the calibration of $\sigma$ are specified as fut
 
 ### Structure and dissemination
 
-Seven sections became four, with related work (Section 1.1) added and organized by what each tradition does with coincident observations. Eleven references are added. 
+Seven sections became four, with related work (Section 1.1) added and organized by what each tradition does with coincident observations. Sixteen references are added. 
 The first presentation is a refereed submission to SDSS 2027 (Pittsburgh, April 27–29), due November 30, 2026. 
 The methods paper goes to the *Journal of Data Science, Statistics, and Visualisation*, which names visualization in its scope, charges no fees, requires reproducing code and data, and targets a three-month decision; the *Journal of Data Science* is the fallback. 
 IEEE VIS, named in March, is retained in two forms: a short paper to VIS 2027 with the benchmarking results and the viewer-study pilot, decided in April once the main study's timing is known, and a full paper to VIS 2028 in TVCG with the complete study, after the defense.
@@ -124,8 +131,9 @@ IEEE VIS, named in March, is retained in two forms: a short paper to VIS 2027 wi
 ## Current status
 
 The method is in the package as `pcp_spread_ties()`, a fourth wrangling step after `pcp_select()`, `pcp_scale()`, and `pcp_arrange()`, with `pcp_arrange_unified()` breaking both kinds of tie in one call. 
-All three processing modes, the separation parameter, clamped bands, the per-axis `vars` argument, `geom_pcp_tieboxes()` with value labels, and both diagnostics are built and exercised in the attached vignette on `iris`, the flea data, and the penguins. 
-What remains: the `resolution` argument and the count label; unit tests and reference documentation; the three benchmarking components; the viewer study; and the method and evaluation chapters.
+All three processing modes, the separation parameter `sigma`, clamped bands, the per-axis `vars` argument, the `center` and `center_reference` arguments of `from-both`, `pcp_tie_boxes()` with a `min_n` threshold, `geom_pcp_tieboxes()` with the box, the value label, and the count label as separate options, and two diagnostics are built and exercised in the attached vignette on `iris`, the flea data, and the penguins. 
+The diagnostics warn when the gap between adjacent bands, $(1-\sigma)\,\delta_j$, falls below `min_gap` (0.005 of the axis by default) and when the spacing inside a band falls below `min_spacing` (0.001 by default), the saturation case. 
+What remains: the `resolution` argument with its diagnostic; unit tests and reference documentation; the three benchmarking components; the viewer study; and the method and evaluation chapters.
 
 ## Adjusted timeline
 
@@ -135,7 +143,7 @@ The viewer study is the one item that waits on human subjects; a delay in instit
 | Period | Work | Milestone |
 |:-------|:------------------------------|:-------------|
 | Nov 2026 | Tracing design pilot. SDSS abstract and two-page extended abstract. Viewer-study protocol drafted. | **SDSS submission, Nov 30** |
-| Dec 2026 | Committee comments addressed. `resolution` argument, count label, unit tests, documentation. Protocol to institutional review; flea stimuli built. | **IRB submission** |
+| Dec 2026 | Committee comments addressed. `resolution` argument and diagnostic, unit tests, documentation. Protocol to institutional review; flea stimuli built. | **IRB submission** |
 | Jan 2027 | Committee review. SDSS decision. Package passes `R CMD check`. Benchmarking harness begun. | **Incomplete resolved** |
 | Feb–Mar 2027 | Benchmarking: adapted metrics, crossing verification, sensitivity analysis, real-data cases. Viewer study: pilot, power analysis, pre-registration, main collection. | **Viewer study run** |
 | Apr 2027 | SDSS talk with benchmarking and pilot results. Sensitivity analysis completed; viewer study analyzed. Decision on a VIS 2027 short paper. | **SDSS presentation** |

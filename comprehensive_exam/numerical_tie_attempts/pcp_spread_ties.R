@@ -3,7 +3,7 @@
 #' ============================================================================
 #'
 #' Implements the tie_spread algorithm from:
-#'   "A Grammar of Graphics Approach to Managing
+#'   Bradford (2026-07-01), "A Grammar of Graphics Approach to Managing
 #'   Numerical Ties in Parallel Coordinate Plots" (Sections 4.3, 4.6, 4.8).
 #'
 #' The algorithm (Section 4.8, Algorithm Summary):
@@ -40,10 +40,8 @@
 #'
 #' Pipeline usage:
 #'
-#'   data %>%
-#'     pcp_select(...) %>%
-#'     pcp_scale("uniminmax") %>%
-#'     pcp_arrange("from-right") %>%      # categorical ties (existing ggpcp)
+#'   data |> pcp_select(...) |> pcp_scale("uniminmax") |>
+#'     pcp_arrange("from-right") |>      # categorical ties (existing ggpcp)
 #'     pcp_spread_ties("from-right")     # numerical ties   (this file)
 #'
 #' or via pcp_arrange_unified(), which performs both. `tie_spread` is
@@ -409,7 +407,7 @@ pcp_arrange_unified <- function(data, method = "from-right", space = 0.05,
 #
 # Consumes the metadata attached by pcp_spread_ties() and returns a data
 # frame ready for geom_rect()/geom_label():
-#   xmin, xmax, ymin, ymax  -- box anchored at [L(v), U(v)] (Section 4.5)
+#   xmin, xmax, ymin, ymax  -- the box; its vertical extent is set by `extent`
 #   label                   -- original tied value when `original` (a wide
 #                              data frame aligned with pcp_id) is supplied,
 #                              otherwise the scaled tied value
@@ -418,9 +416,20 @@ pcp_arrange_unified <- function(data, method = "from-right", space = 0.05,
 #   min_n  suppress boxes for bands with fewer than min_n observations, the
 #          clutter-reduction default flagged in Section 3.2 (default 2, i.e.
 #          every band; a value with a single observation never gets a box).
+#   extent vertical extent of the box (Section 4.5):
+#            "inner" (default) the dot-placement region
+#                    [L(v) + S-(v), U(v) - S+(v)], of height sigma * S(v).
+#                    Boxes at adjacent tied values are separated by the same
+#                    gap as the observations, (1 - sigma) * delta_j, so
+#                    distinct values read as distinct boxes.
+#            "band"  the full allocation [L(v), U(v)]. Bands at adjacent
+#                    values share an edge, so their boxes merge into one
+#                    column wherever consecutive values are all tied.
 # ---------------------------------------------------------------------------
 pcp_tie_boxes <- function(data, boxwidth = 0.2, original = NULL,
-                          digits = 2, min_n = 2) {
+                          digits = 2, min_n = 2,
+                          extent = c("inner", "band")) {
+  extent <- match.arg(extent)
   ties <- attr(data, "pcp_ties")
   if (is.null(ties) || nrow(ties) == 0L) return(empty_boxes())
 
@@ -457,29 +466,67 @@ pcp_tie_boxes <- function(data, boxwidth = 0.2, original = NULL,
     fmt(ties$value[r])
   }, character(1))
 
+  if (extent == "inner") {
+    ties$ymin <- ties$inner_min
+    ties$ymax <- ties$inner_max
+  }
+
   rownames(ties) <- NULL
   ties
 }
 
 # ---------------------------------------------------------------------------
-# geom_pcp_tieboxes(): convenience ggplot2 layers drawing the light gray
-# bounding boxes (and optional value labels) behind the polylines, mirroring
-# ggpcp's categorical geom_pcp_boxes() convention (Section 4.5). Add BEFORE
-# geom_pcp() so the boxes sit behind the lines. (Whether this becomes a
-# ggproto extension of the categorical box geom is the Phase 1 decision.)
+# geom_pcp_tieboxes(): convenience ggplot2 layers for the numeric tie cue
+# (Section 4.5), mirroring ggpcp's categorical geom_pcp_boxes() and
+# geom_pcp_labels(). The cue has three elements, each of which can be drawn
+# or left out:
+#
+#   box     the light gray box marking where a tie is and how far its spread
+#           extends (default TRUE)
+#   labels  the value label: the original tied value, at the centre of the box
+#           (default FALSE)
+#   counts  the count label: "n = k" beside the box, the number of
+#           observations sharing the value. On by default whenever value
+#           labels are drawn (counts = labels), for boxes holding at least
+#           `count_min_n` observations (default 3). Set counts = FALSE to
+#           leave it out, or counts = TRUE with labels = FALSE to draw the
+#           count alone.
+#
+# Layers are drawn in the order they are added. Add the boxes BEFORE
+# geom_pcp() so that they sit behind the lines. Labels added in the same call
+# sit behind the lines too; to put them in front, add the boxes first and the
+# labels in a second call after geom_pcp():
+#
+#   ggplot(data, aes_pcp()) +
+#     geom_pcp_tieboxes(boxes) +                                  # boxes, behind
+#     geom_pcp(aes(colour = group)) +
+#     geom_pcp_tieboxes(boxes, box = FALSE, labels = TRUE)        # labels, in front
+#
+# (Whether this becomes a ggproto extension of the categorical box geom is
+# left open.)
 # ---------------------------------------------------------------------------
 geom_pcp_tieboxes <- function(boxes, fill = "grey85", colour = NA,
                               alpha = 0.9, labels = FALSE,
                               label_fill = "grey40", label_colour = "white",
-                              label_size = 2.5) {
-  layers <- list(
-    ggplot2::geom_rect(
-      data = boxes,
-      ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax,
-                   ymin = .data$ymin, ymax = .data$ymax),
-      fill = fill, colour = colour, alpha = alpha, inherit.aes = FALSE
-    )
-  )
+                              label_size = 2.5,
+                              counts = labels, count_min_n = 3,
+                              count_fill = "white", count_colour = "grey15",
+                              count_size = 0.9 * label_size, count_nudge = 0.02,
+                              box = TRUE) {
+  stopifnot(is.logical(box), is.logical(labels), is.logical(counts),
+            is.numeric(count_min_n), length(count_min_n) == 1)
+  layers <- list()
+
+  if (box) {
+    layers <- c(layers, list(
+      ggplot2::geom_rect(
+        data = boxes,
+        ggplot2::aes(xmin = .data$xmin, xmax = .data$xmax,
+                     ymin = .data$ymin, ymax = .data$ymax),
+        fill = fill, colour = colour, alpha = alpha, inherit.aes = FALSE
+      )
+    ))
+  }
 
   if (labels && nrow(boxes) > 0L) {
     layers <- c(layers, list(
@@ -494,6 +541,24 @@ geom_pcp_tieboxes <- function(boxes, fill = "grey85", colour = NA,
         inherit.aes = FALSE
       )
     ))
+  }
+
+  if (counts) {
+    counted <- boxes[boxes$n >= count_min_n, , drop = FALSE]
+    if (nrow(counted) > 0L) {
+      layers <- c(layers, list(
+        ggplot2::geom_label(
+          data = counted,
+          ggplot2::aes(x = .data$xmax + count_nudge,
+                       y = (.data$ymin + .data$ymax) / 2,
+                       label = paste0("n = ", .data$n)),
+          hjust = 0, fill = count_fill, colour = count_colour, size = count_size,
+          label.padding = ggplot2::unit(0.1, "lines"),
+          label.r = ggplot2::unit(0.1, "lines"),
+          inherit.aes = FALSE
+        )
+      ))
+    }
   }
 
   layers
